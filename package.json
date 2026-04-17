@@ -6,6 +6,7 @@
   "scripts": {
     "start": "electron .",
     "build": "electron-builder --win",
+    "seed": "sqlite3 ~/.config/clinica-estetica/clinica.db < seed-clientes.sql",
     "postinstall": "electron-rebuild -f -w better-sqlite3"
   },
   "build": {
