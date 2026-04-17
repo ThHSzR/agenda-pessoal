@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Clínica Estética</title>
+  <link rel="stylesheet" href="./css/style.css"/>
+</head>
+<body>
+<div id="app">
+
+  <aside id="sidebar">
+    <div class="brand">
+      🌸 Clínica Estética
+      <small>Sistema de Agendamento</small>
+    </div>
+    <nav>
+      <a class="nav-link active" data-page="calendario"><span class="icon">📅</span> Calendário</a>
+      <a class="nav-link" data-page="agendamentos"><span class="icon">📋</span> Agendamentos</a>
+      <a class="nav-link" data-page="clientes"><span class="icon">👤</span> Clientes</a>
+      <a class="nav-link" data-page="procedimentos"><span class="icon">💆</span> Procedimentos</a>
+      <a class="nav-link" data-page="financeiro"><span class="icon">💰</span> Financeiro</a>
+    </nav>
+  </aside>
+
+  <main id="content">
+    <div id="page-calendario"    class="page"></div>
+    <div id="page-agendamentos"  class="page hidden"></div>
+    <div id="page-clientes"      class="page hidden"></div>
+    <div id="page-procedimentos" class="page hidden"></div>
+    <div id="page-financeiro"    class="page hidden"></div>
+  </main>
+</div>
+
+<div id="toast-container"></div>
+
+<!-- ═══ MODAL AGENDAMENTO ═══ -->
+<div id="modal-agendamento" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modal-agend-title">Novo Agendamento</h2>
+      <button class="modal-close" onclick="fecharModal('modal-agendamento')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="agend-id"/>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Cliente *</label>
+          <select id="agend-cliente"></select>
+        </div>
+        <div class="form-group">
+          <label>Procedimento *</label>
+          <select id="agend-procedimento" onchange="preencherValor()"></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Data e Hora *</label>
+          <input type="datetime-local" id="agend-data-hora"/>
+        </div>
+        <div class="form-group">
+          <label>Valor (R$)</label>
+          <input type="number" id="agend-valor" step="0.01" min="0"/>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Status</label>
+        <select id="agend-status">
+          <option value="agendado">Agendado</option>
+          <option value="concluido">Concluído</option>
+          <option value="cancelado">Cancelado</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Observações</label>
+        <textarea id="agend-obs" rows="2"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="fecharModal('modal-agendamento')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarAgendamento()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL CLIENTE (Ficha de Anamnese) ═══ -->
+<div id="modal-cliente" class="modal-overlay hidden">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h2 id="modal-cliente-title">Nova Ficha de Anamnese</h2>
+      <button class="modal-close" onclick="fecharModal('modal-cliente')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="cli-id"/>
+
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('tab-dados',this)">📋 Dados Pessoais</button>
+        <button class="tab-btn" onclick="switchTab('tab-depil',this)">🪒 Depilação</button>
+        <button class="tab-btn" onclick="switchTab('tab-saude',this)">🏥 Saúde</button>
+        <button class="tab-btn" onclick="switchTab('tab-fisico',this)">🧬 Físico / Pele</button>
+      </div>
+
+      <!-- ABA 1 -->
+      <div id="tab-dados" class="tab-content">
+        <div class="form-row">
+          <div class="form-group" style="grid-column:1/-1">
+            <label>Nome Completo *</label>
+            <input type="text" id="cli-nome"/>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Data de Nascimento</label>
+            <input type="date" id="cli-nasc"/>
+          </div>
+          <div class="form-group">
+            <label>CPF</label>
+            <input type="text" id="cli-cpf" placeholder="000.000.000-00"/>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Telefone Residencial</label>
+            <input type="tel" id="cli-telefone" placeholder="(00) 0000-0000"/>
+          </div>
+          <div class="form-group">
+            <label>Celular / WhatsApp</label>
+            <input type="tel" id="cli-celular" placeholder="(00) 00000-0000"/>
+          </div>
+          <div class="form-group">
+            <label>E-mail</label>
+            <input type="email" id="cli-email"/>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group" style="grid-column:1/-1">
+            <label>Endereço</label>
+            <input type="text" id="cli-endereco"/>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Cidade</label>
+            <input type="text" id="cli-cidade"/>
+          </div>
+          <div class="form-group" style="max-width:100px">
+            <label>UF</label>
+            <input type="text" id="cli-uf" maxlength="2" placeholder="GO"/>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Áreas que pretende tratar</label>
+          <input type="text" id="cli-areas" placeholder="Ex: virilha, axilas, pernas..."/>
+        </div>
+      </div>
+
+      <!-- ABA 2 -->
+      <div id="tab-depil" class="tab-content hidden">
+        <p class="section-label">Método de depilação anterior</p>
+        <div class="check-group">
+          <label><input type="checkbox" id="cli-dep-cera"/> Cera</label>
+          <label><input type="checkbox" id="cli-dep-lamina"/> Lâmina</label>
+          <label><input type="checkbox" id="cli-dep-laser"/> Laser / Luz pulsada / Fotodepilação</label>
+        </div>
+        <p class="section-label" style="margin-top:18px">Problemas anteriores</p>
+        <div class="check-group">
+          <label><input type="checkbox" id="cli-prob-encrav"/> Encravamento</label>
+          <label><input type="checkbox" id="cli-prob-manchas"/> Manchas</label>
+        </div>
+        <div class="form-group" style="margin-top:12px">
+          <label>Outros problemas</label>
+          <input type="text" id="cli-prob-outros" placeholder="Descreva se houver"/>
+        </div>
+      </div>
+
+      <!-- ABA 3 -->
+      <div id="tab-saude" class="tab-content hidden">
+        <div class="anamnese-row">
+          <span>Medicamento em uso?</span>
+          <label><input type="radio" name="r-med" value="1"/> Sim</label>
+          <label><input type="radio" name="r-med" value="0" checked/> Não</label>
+          <input type="text" id="cli-med-qual" placeholder="Qual?" class="inline-input"/>
+        </div>
+        <div class="anamnese-row">
+          <span>Roacutan?</span>
+          <label><input type="radio" name="r-roac" value="1"/> Sim</label>
+          <label><input type="radio" name="r-roac" value="0" checked/> Não</label>
+          <span style="margin-left:12px">Tto. Vitiligo?</span>
+          <label><input type="radio" name="r-vitil" value="1"/> Sim</label>
+          <label><input type="radio" name="r-vitil" value="0" checked/> Não</label>
+        </div>
+        <div class="anamnese-row">
+          <span>Alergia a medicamento?</span>
+          <label><input type="radio" name="r-alergia" value="1"/> Sim</label>
+          <label><input type="radio" name="r-alergia" value="0" checked/> Não</label>
+          <input type="text" id="cli-alergia-qual" placeholder="Qual?" class="inline-input"/>
+        </div>
+        <div class="anamnese-row">
+          <span>Tratamento dermato/estético?</span>
+          <label><input type="radio" name="r-derm" value="1"/> Sim</label>
+          <label><input type="radio" name="r-derm" value="0" checked/> Não</label>
+          <input type="text" id="cli-derm-qual" placeholder="Qual?" class="inline-input"/>
+          <span style="margin-left:8px">Ácidos?</span>
+          <label><input type="radio" name="r-acidos" value="1"/> Sim</label>
+          <label><input type="radio" name="r-acidos" value="0" checked/> Não</label>
+        </div>
+        <div class="anamnese-row">
+          <span>Já fez cirurgia?</span>
+          <label><input type="radio" name="r-cir" value="1"/> Sim</label>
+          <label><input type="radio" name="r-cir" value="0" checked/> Não</label>
+          <input type="text" id="cli-cir-qual" placeholder="Qual?" class="inline-input"/>
+        </div>
+        <div class="anamnese-row">
+          <span>Anticoncepcional?</span>
+          <label><input type="radio" name="r-anti" value="1"/> Sim</label>
+          <label><input type="radio" name="r-anti" value="0" checked/> Não</label>
+          <input type="text" id="cli-anti-qual" placeholder="Especifique" class="inline-input"/>
+        </div>
+        <div class="anamnese-row">
+          <span>Histórico oncológico?</span>
+          <label><input type="radio" name="r-onco" value="1"/> Sim</label>
+          <label><input type="radio" name="r-onco" value="0" checked/> Não</label>
+          <input type="text" id="cli-onco-qual" placeholder="Qual?" class="inline-input"/>
+        </div>
+        <div class="anamnese-row">
+          <span>Acompanhamento médico?</span>
+          <label><input type="radio" name="r-acomp" value="1"/> Sim</label>
+          <label><input type="radio" name="r-acomp" value="0" checked/> Não</label>
+          <input type="text" id="cli-acomp-qual" placeholder="Qual?" class="inline-input"/>
+        </div>
+        <div class="anamnese-row">
+          <span>Epilepsia?</span>
+          <label><input type="radio" name="r-epil" value="1"/> Sim</label>
+          <label><input type="radio" name="r-epil" value="0" checked/> Não</label>
+        </div>
+        <div class="anamnese-row">
+          <span>Alteração hormonal?</span>
+          <label><input type="radio" name="r-horm" value="1"/> Sim</label>
+          <label><input type="radio" name="r-horm" value="0" checked/> Não</label>
+          <input type="text" id="cli-horm-qual" placeholder="Qual?" class="inline-input"/>
+          <span style="margin-left:8px">Hirsutismo?</span>
+          <label><input type="radio" name="r-hirsu" value="1"/> Sim</label>
+          <label><input type="radio" name="r-hirsu" value="0" checked/> Não</label>
+        </div>
+        <div class="anamnese-row">
+          <span>Gestante?</span>
+          <label><input type="radio" name="r-gest" value="1"/> Sim</label>
+          <label><input type="radio" name="r-gest" value="0" checked/> Não</label>
+          <span style="margin-left:10px">Lactante?</span>
+          <label><input type="radio" name="r-lact" value="1"/> Sim</label>
+          <label><input type="radio" name="r-lact" value="0" checked/> Não</label>
+          <span style="margin-left:10px">Herpes?</span>
+          <label><input type="radio" name="r-herpes" value="1"/> Sim</label>
+          <label><input type="radio" name="r-herpes" value="0" checked/> Não</label>
+        </div>
+        <div class="form-group" style="margin-top:14px">
+          <label>Observações gerais</label>
+          <textarea id="cli-obs" rows="3"></textarea>
+        </div>
+      </div>
+
+      <!-- ABA 4 -->
+      <div id="tab-fisico" class="tab-content hidden">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Cor dos olhos</label>
+            <input type="text" id="cli-olhos" placeholder="Ex: castanhos"/>
+          </div>
+          <div class="form-group">
+            <label>Cor dos cabelos</label>
+            <input type="text" id="cli-cabelos" placeholder="Ex: pretos"/>
+          </div>
+          <div class="form-group">
+            <label>Cor dos pelos</label>
+            <input type="text" id="cli-pelos" placeholder="Ex: negros"/>
+          </div>
+        </div>
+        <div class="anamnese-row" style="margin-top:8px">
+          <span>Tomou sol nos últimos 30 dias?</span>
+          <label><input type="radio" name="r-sol" value="1"/> Sim</label>
+          <label><input type="radio" name="r-sol" value="0" checked/> Não</label>
+          <input type="text" id="cli-sol-quando" placeholder="Quando?" class="inline-input"/>
+        </div>
+        <div class="form-group" style="margin-top:20px">
+          <label>Classificação Fitzpatrick — Como sua pele reage ao sol?</label>
+          <div class="fitzpatrick-grid">
+            <label class="fitz-option"><input type="radio" name="r-fitz" value="1"/> <span><strong>Tipo I</strong> — Sempre queima, nunca bronzeia</span></label>
+            <label class="fitz-option"><input type="radio" name="r-fitz" value="2"/> <span><strong>Tipo II</strong> — Sempre queima, bronzeia com dificuldade</span></label>
+            <label class="fitz-option"><input type="radio" name="r-fitz" value="3"/> <span><strong>Tipo III</strong> — Às vezes queima, sempre bronzeia</span></label>
+            <label class="fitz-option"><input type="radio" name="r-fitz" value="4"/> <span><strong>Tipo IV</strong> — Raramente queima, bronzeia facilmente</span></label>
+            <label class="fitz-option"><input type="radio" name="r-fitz" value="5"/> <span><strong>Tipo V</strong> — Queima muito raramente, bronzeia muito facilmente</span></label>
+            <label class="fitz-option"><input type="radio" name="r-fitz" value="6"/> <span><strong>Tipo VI</strong> — Nunca queima, bronzeia muito facilmente</span></label>
+          </div>
+        </div>
+        <div class="anamnese-row" style="margin-top:16px">
+          <label style="font-weight:600; color:var(--rosa-dark)">
+            <input type="checkbox" id="cli-termo"/>
+            &nbsp;Afirmo serem verdadeiras todas as informações acima prestadas (Termo de Responsabilidade)
+          </label>
+        </div>
+      </div>
+
+    </div><!-- fim modal-body -->
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="fecharModal('modal-cliente')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarCliente()">💾 Salvar Ficha</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL PROCEDIMENTO ═══ -->
+<div id="modal-procedimento" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modal-proc-title">Novo Procedimento</h2>
+      <button class="modal-close" onclick="fecharModal('modal-procedimento')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="proc-id"/>
+      <div class="form-group">
+        <label>Nome do Procedimento *</label>
+        <input type="text" id="proc-nome"/>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Duração (minutos)</label>
+          <input type="number" id="proc-duracao" value="60" min="15" step="15"/>
+        </div>
+        <div class="form-group">
+          <label>Valor Padrão (R$)</label>
+          <input type="number" id="proc-valor" step="0.01" min="0"/>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Descrição</label>
+        <textarea id="proc-desc" rows="2"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="fecharModal('modal-procedimento')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarProcedimento()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script src="./js/utils.js"></script>
+<script src="./js/calendario.js"></script>
+<script src="./js/clientes.js"></script>
+<script src="./js/procedimentos.js"></script>
+<script src="./js/agendamentos.js"></script>
+<script src="./js/financeiro.js"></script>
+<script src="./js/app.js"></script>
+</body>
+</html>
