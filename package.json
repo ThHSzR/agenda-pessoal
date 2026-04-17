@@ -5,7 +5,8 @@
   "main": "main/main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder --win"
+    "build": "electron-builder --win",
+    "postinstall": "electron-rebuild -f -w better-sqlite3"
   },
   "build": {
     "appId": "com.clinica.estetica",
@@ -33,14 +34,10 @@
   },
   "devDependencies": {
     "@electron/rebuild": "^3.7.2",
-    "electron": "^28.0.0",
+    "electron": "^28.3.3",
     "electron-builder": "^24.0.0"
   },
   "dependencies": {
     "better-sqlite3": "^9.4.3"
-  },
-  "scripts": {
-  "start": "electron .",
-  "postinstall": "electron-rebuild -f -w better-sqlite3"
-}
+  }
 }
