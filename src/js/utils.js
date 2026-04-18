@@ -56,16 +56,17 @@ function toDbDatetime(inputVal) {
   return inputVal.replace('T', ' ') + ':00';
 }
 
-function abrirWhatsApp(telefone, dataHoraAgend) {
+function abrirWhatsApp(telefone, dataHoraAgend, nomeCliente) {
   if (!telefone) { toast('Cliente sem telefone cadastrado.', 'error'); return; }
 
   const num = telefone.replace(/\D/g, '');
 
-  // Saudação baseada na hora ATUAL
   const horaAtual = new Date().getHours();
   const saudacao  = horaAtual < 12 ? 'Bom dia' : horaAtual < 18 ? 'Boa tarde' : 'Boa noite';
 
-  // Referência ao dia do agendamento
+  // Primeiro nome apenas: "Maria Silva" → "Maria"
+  const primeiroNome = nomeCliente ? ', ' + nomeCliente.trim().split(' ')[0] : '';
+
   let refDia = '';
   if (dataHoraAgend) {
     const agora     = new Date();
@@ -93,8 +94,8 @@ function abrirWhatsApp(telefone, dataHoraAgend) {
   }
 
   const texto = refDia
-    ? `${saudacao}! 😊 Passando para confirmar o seu horário ${refDia}. Tudo certo?`
-    : `${saudacao}! 😊`;
+    ? `${saudacao}${primeiroNome}! 😊 Passando para confirmar o seu horário ${refDia}. Tudo certo?`
+    : `${saudacao}${primeiroNome}! 😊`;
 
   window.open(`https://wa.me/55${num}?text=${encodeURIComponent(texto)}`, '_blank');
 }

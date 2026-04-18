@@ -61,6 +61,10 @@ const api = {
         getInteresse: (id) => api._fetch('GET', `/api/cliente-variantes/${id}`),
         salvarInteresse: (p) => api._fetch('POST', '/api/cliente-variantes', p),
     },
+    auth: {
+        logout: () => api._fetch('POST', '/api/logout'),
+        me: () => api._fetch('GET', '/api/me'),
+    },
 };
 
 window.api = api;

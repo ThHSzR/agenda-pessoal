@@ -68,7 +68,7 @@ function renderLinhasAgend(lista) {
       </td>
      <td>
   <button class="btn btn-whatsapp btn-sm"
-    onclick="abrirWhatsApp('${a.cliente_telefone}', '${a.data_hora}')"
+    onclick="abrirWhatsApp('${a.cliente_telefone}', '${a.data_hora}', '${a.cliente_nome}')"
     title="Confirmar via WhatsApp">💬</button>
   <button class="btn btn-info btn-sm" onclick="editarAgendamento(${a.id})">✏️</button>
   <button class="btn btn-danger btn-sm" onclick="excluirAgend(${a.id})">🗑️</button>
@@ -161,6 +161,7 @@ function preencherValor() {
 // ── estado interno dos procs do modal ────────────────────────
 let _agendProcsModal = []; // [{procId, varianteId, valor, duracao, nomeProc, nomeVar}]
 let _agendClienteTelefone = null;
+let _agendClienteNome = null;
 let _agendDataHora = null;
 
 function _isGerente() {
@@ -270,7 +271,7 @@ function _agendRemoverProc(idx) {
 }
 
 function _agendWhatsApp() {
-  abrirWhatsApp(_agendClienteTelefone, _agendDataHora);
+  abrirWhatsApp(_agendClienteTelefone, _agendDataHora, _agendClienteNome);
 }
 
 async function abrirNovoAgendamento(dataHoraPre) {
@@ -318,6 +319,7 @@ async function editarAgendamento(id) {
 
   // Botão WhatsApp no modal de edição
   _agendClienteTelefone = a.cliente_telefone;
+  _agendClienteNome     = a.cliente_nome;
   _agendDataHora        = a.data_hora;
   const btnWa = document.getElementById('agend-whatsapp-btn');
   btnWa.style.display = _agendClienteTelefone ? '' : 'none';
@@ -336,18 +338,19 @@ async function salvarAgendamento() {
   const procsValidos = _agendProcsModal.filter(Boolean);
   if (procsValidos.length === 0) { toast('Adicione ao menos um procedimento.', 'error'); return; }
 
-  // Usa o primeiro procedimento/variante como principal (compatível com DB atual)
-  const primeiro = procsValidos[0];
-
   await window.api.agendamentos.salvar({
-    id:             document.getElementById('agend-id').value || null,
-    cliente_id:     parseInt(clienteId),
-    procedimento_id: primeiro.procId,
-    variante_id:    primeiro.varianteId || null,
-    data_hora:      toDbDatetime(dataHora),
-    status:         document.getElementById('agend-status').value,
-    valor_cobrado:  parseFloat(document.getElementById('agend-valor').value) || 0,
-    observacoes:    document.getElementById('agend-obs').value,
+    id:            document.getElementById('agend-id').value || null,
+    cliente_id:    parseInt(clienteId),
+    data_hora:     toDbDatetime(dataHora),
+    status:        document.getElementById('agend-status').value,
+    valor_cobrado: parseFloat(document.getElementById('agend-valor').value) || 0,
+    observacoes:   document.getElementById('agend-obs').value,
+    procs: procsValidos.map(p => ({
+      procId:      p.procId,
+      varianteId:  p.varianteId || null,
+      valor:       p.valor,
+      duracao_min: p.duracao,
+    })),
   });
 
   fecharModal('modal-agendamento');
