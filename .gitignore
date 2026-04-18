@@ -1,2 +1,5 @@
+clinica.db
+clinica.db-shm
+clinica.db-wal
 node_modules/
 package-lock.json
