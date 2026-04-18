@@ -42,7 +42,6 @@ function authAdmin(req, res, next) {
   res.status(403).json({ erro: 'Acesso negado' });
 }
 
-// admin OU gerente
 function authGerente(req, res, next) {
   if (req.session?.logado && (req.session?.is_admin || req.session?.cargo === 'gerente')) return next();
   res.status(403).json({ erro: 'Acesso negado' });
@@ -142,7 +141,7 @@ app.get('/api/clientes', auth, (req, res) => {
 
 app.get('/api/clientes/:id', auth, (req, res) => {
   const row = getDb().prepare('SELECT * FROM clientes WHERE id=?').get(req.params.id);
-  row ? res.json(row) : res.status(404).json({ erro: 'Não encontrado' });
+  row ? res.json(row) : res.status(404).json({ erro: 'Não encontrado' });;
 });
 
 app.post('/api/clientes', auth, (req, res) => {
@@ -178,7 +177,7 @@ app.delete('/api/clientes/:id', auth, (req, res) => {
   res.json({ ok: true });
 });
 
-// ── PROCEDIMENTOS (auth + gerente/admin para escrita) ─────────
+// ── PROCEDIMENTOS (leitura: todos | escrita: gerente/admin) ───
 app.get('/api/procedimentos', auth, (req, res) => {
   const sql = req.query.todos === '1'
     ? 'SELECT * FROM procedimentos ORDER BY nome'
@@ -285,8 +284,8 @@ app.patch('/api/agendamentos/:id/status', auth, (req, res) => {
   res.json({ ok: true });
 });
 
-// ── FINANCEIRO ────────────────────────────────────────────────
-app.get('/api/financeiro/resumo', auth, (req, res) => {
+// ── FINANCEIRO (gerente/admin apenas) ─────────────────────────
+app.get('/api/financeiro/resumo', authGerente, (req, res) => {
   const { inicio, fim } = req.query;
   res.json(getDb().prepare(`
     SELECT COUNT(*) as total_agendamentos,
@@ -297,7 +296,7 @@ app.get('/api/financeiro/resumo', auth, (req, res) => {
   `).get(inicio, fim));
 });
 
-app.get('/api/financeiro/detalhado', auth, (req, res) => {
+app.get('/api/financeiro/detalhado', authGerente, (req, res) => {
   const { inicio, fim } = req.query;
   res.json(getDb().prepare(`
     SELECT a.data_hora, a.status, a.valor_cobrado,

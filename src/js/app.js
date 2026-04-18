@@ -4,7 +4,7 @@ const paginas = {
   clientes: renderClientes,
   procedimentos: renderProcedimentos,
   financeiro: renderFinanceiro,
-  usuarios: renderUsuarios,   // ← estava faltando
+  usuarios: renderUsuarios,
 };
 
 let paginaAtual = 'calendario';
@@ -12,7 +12,7 @@ let paginaAtual = 'calendario';
 function navegar(pagina) {
   const pageEl = document.getElementById(`page-${pagina}`);
   const navEl = document.querySelector(`[data-page="${pagina}"]`);
-  if (!pageEl || !navEl) return;  // página ainda não existe no DOM → ignora
+  if (!pageEl || !navEl) return;
 
   document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
   document.querySelectorAll('.nav-link').forEach(a => a.classList.remove('active'));
@@ -29,27 +29,21 @@ document.querySelectorAll('.nav-link').forEach(a => {
   a.addEventListener('click', () => navegar(a.dataset.page));
 });
 
-// Verificação de sessão + links dinâmicos (admin)
+// Verificação de sessão + montagem dinâmica da sidebar
 (async () => {
   const res = await fetch('/api/me', { credentials: 'same-origin' });
   if (!res.ok) { window.location.href = '/login.html'; return; }
-  const { usuario, is_admin } = await res.json();
 
-  // No bloco async, depois de: const { usuario, is_admin, cargo } = await res.json();
+  // ← desestrutura cargo também
+  const { usuario, is_admin, cargo } = await res.json();
 
-  // Esconde aba Procedimentos para quem não é admin nem gerente
+
+  // Esconde aba Procedimentos e Financeiro para operadores
   if (!is_admin && cargo !== 'gerente') {
     const linkProc = document.querySelector('[data-page="procedimentos"]');
     if (linkProc) linkProc.style.display = 'none';
-  }
-
-  // Nome do usuário na sidebar
-  const brand = document.querySelector('#sidebar .brand');
-  if (brand) {
-    const div = document.createElement('div');
-    div.style = 'font-size:0.75rem;color:#888;margin-top:4px';
-    div.textContent = '👤 ' + usuario;
-    brand.appendChild(div);
+    const linkFin = document.querySelector('[data-page="financeiro"]');
+    if (linkFin) linkFin.style.display = 'none';
   }
 
   const nav = document.querySelector('#sidebar nav');
@@ -60,23 +54,20 @@ document.querySelectorAll('.nav-link').forEach(a => {
 
     // Botão Usuários — só para admin
     if (is_admin) {
-      // Cria o <div> da página antes de registrar o link
       if (!document.getElementById('page-usuarios')) {
         document.getElementById('page-financeiro').insertAdjacentHTML('afterend',
           '<div id="page-usuarios" class="page hidden"></div>'
         );
       }
-
       const btnAdmin = document.createElement('a');
       btnAdmin.className = 'nav-link';
       btnAdmin.dataset.page = 'usuarios';
       btnAdmin.innerHTML = '<span class="icon">⚙️</span> Usuários';
-      // ← event listener adicionado aqui, não pelo querySelectorAll anterior
       btnAdmin.addEventListener('click', () => navegar('usuarios'));
       nav.appendChild(btnAdmin);
     }
 
-    // Botão Sair
+    // Botão Sair — todos os cargos veem
     const btnLogout = document.createElement('a');
     btnLogout.className = 'nav-link';
     btnLogout.style = 'color:#dc2626;cursor:pointer';
@@ -88,6 +79,6 @@ document.querySelectorAll('.nav-link').forEach(a => {
     nav.appendChild(btnLogout);
   }
 
-  // Inicia na página do calendário
+  // Inicia no calendário para todos os cargos
   navegar('calendario');
 })();
