@@ -21,7 +21,7 @@ async function renderCalendario() {
           <button onclick="calMudarView('semana')" class="${calView==='semana'?'active':''}">Semana</button>
           <button onclick="calMudarView('mes')"    class="${calView==='mes'?'active':''}">Mês</button>
         </div>
-        <button class="btn btn-secondary btn-sm" onclick="calHoje()">Hoje</button>
+        <button class="btn btn-rosa btn-sm" onclick="calHoje()">Hoje</button>
       </div>
       <div id="cal-body"></div>
     </div>
@@ -99,7 +99,10 @@ async function renderSemana() {
 
   const inicio = diasSemana[0].toISOString().slice(0,10);
   const fim    = diasSemana[6].toISOString().slice(0,10);
-  const ags    = await window.api.agendamentos.listar({ data_inicio: inicio+' 00:00:00', data_fim: fim+' 23:59:59' });
+  const ags    = await window.api.agendamentos.listar({
+    data_inicio: inicio + ' 00:00:00',
+    data_fim: fim + ' 23:59:59'
+  });
 
   const agMap = {};
   ags.forEach(a => {
@@ -113,31 +116,46 @@ async function renderSemana() {
   const dias = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
   const hojeStr = hoje();
 
-    let html = `
-    <div class="cal-week">
-      <div class="cal-week-header cal-week-grid">
-        <div class="cal-week-time-head"></div>
-      ${diasSemana.map((d,i) => {
-        const ds = d.toISOString().slice(0,10);
-        const isH = ds === hojeStr;
-        return `<div style="${isH?'color:var(--rosa);font-weight:700':''}">${dias[i]} ${d.getDate()}</div>`;
-      }).join('')}
+  let html = `
+    <div class="cal-week-wrap">
+      <table class="cal-week-table">
+        <thead>
+          <tr>
+            <th class="cal-week-th-hora"></th>
+            ${diasSemana.map((d, i) => {
+              const ds = d.toISOString().slice(0,10);
+              const isHoje = ds === hojeStr;
+              return `<th class="cal-week-th-dia${isHoje ? ' hoje' : ''}">
+                <span>${dias[i]}</span>
+                <strong>${String(d.getDate()).padStart(2,'0')}</strong>
+              </th>`;
+            }).join('')}
+          </tr>
+        </thead>
+        <tbody>
+          ${Array.from({ length: 15 }, (_, idx) => {
+            const h = idx + 7;
+            return `
+              <tr>
+                <td class="cal-week-hora">${String(h).padStart(2,'0')}:00</td>
+                ${diasSemana.map(d => {
+                  const ds = d.toISOString().slice(0,10);
+                  const eventos = (agMap[ds] && agMap[ds][h]) || [];
+                  return `<td class="cal-week-cell">
+                    ${eventos.map(a => `
+                      <div class="cal-agend-block" onclick="editarAgendamento(${a.id})">
+                        ${fmtHora(a.data_hora)} ${a.cliente_nome}
+                      </div>
+                    `).join('')}
+                  </td>`;
+                }).join('')}
+              </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
     </div>
-    <div class="cal-week-body" style="display:block">`;
+  `;
 
-  for (let h = 7; h <= 21; h++) {
-    html += `<div class="cal-hour-row" style="display:grid;grid-template-columns: 52px repeat(7,1fr)">
-      <div class="cal-hour-label">${String(h).padStart(2,'0')}:00</div>`;
-    diasSemana.forEach(d => {
-      const ds = d.toISOString().slice(0,10);
-      const eventos = (agMap[ds] && agMap[ds][h]) || [];
-      html += `<div class="cal-hour-cell">${eventos.map(a =>
-        `<div class="cal-agend-block" onclick="editarAgendamento(${a.id})">${fmtHora(a.data_hora)} ${a.cliente_nome}</div>`
-      ).join('')}</div>`;
-    });
-    html += `</div>`;
-  }
-  html += `</div></div>`;
   document.getElementById('cal-body').innerHTML = html;
 }
 

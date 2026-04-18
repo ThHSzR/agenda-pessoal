@@ -31,5 +31,17 @@ contextBridge.exposeInMainWorld('api', {
   // Relatório/impressão
   relatorio: {
     abrir: (html) => ipcRenderer.invoke('relatorio:abrir', html),
-  }
+  },
+  
+  laser: {
+  listarRegioes:         ()       => ipcRenderer.invoke('laser:listarRegioes'),
+  salvarRegiao:          (d)      => ipcRenderer.invoke('laser:salvarRegiao', d),
+  getRegioesByCliente:   (id)     => ipcRenderer.invoke('laser:getRegioesByCliente', id),
+  salvarRegioesByCliente:(p)      => ipcRenderer.invoke('laser:salvarRegioesByCliente', p),
+},
+clienteProc: {
+  getInteresse:   (id) => ipcRenderer.invoke('cliente:getProcInteresse', id),
+  salvarInteresse:(p)  => ipcRenderer.invoke('cliente:salvarProcInteresse', p),
+},
+
 });

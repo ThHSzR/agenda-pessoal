@@ -209,3 +209,50 @@ ipcMain.handle('relatorio:abrir', (_, html) => {
     win.webContents.print({ silent: false, printBackground: true });
   });
 });
+
+// ─── LASER REGIÕES ───────────────────────────────────────────
+ipcMain.handle('laser:listarRegioes', () => {
+  return getDb().prepare('SELECT * FROM laser_regioes WHERE ativo=1 ORDER BY nome').all();
+});
+
+ipcMain.handle('laser:salvarRegiao', (_, d) => {
+  const db = getDb();
+  if (d.id) {
+    db.prepare('UPDATE laser_regioes SET nome=?,duracao_min=?,valor=?,ativo=? WHERE id=?')
+      .run(d.nome, d.duracao_min, d.valor, d.ativo ?? 1, d.id);
+  } else {
+    db.prepare('INSERT INTO laser_regioes (nome,duracao_min,valor) VALUES (?,?,?)')
+      .run(d.nome, d.duracao_min, d.valor);
+  }
+});
+
+ipcMain.handle('laser:getRegioesByCliente', (_, clienteId) => {
+  return getDb().prepare(`
+    SELECT lr.* FROM laser_regioes lr
+    JOIN cliente_laser_regioes clr ON clr.regiao_id = lr.id
+    WHERE clr.cliente_id = ?
+    ORDER BY lr.nome
+  `).all(clienteId);
+});
+
+ipcMain.handle('laser:salvarRegioesByCliente', (_, { clienteId, regiaoIds }) => {
+  const db = getDb();
+  db.prepare('DELETE FROM cliente_laser_regioes WHERE cliente_id=?').run(clienteId);
+  const ins = db.prepare('INSERT INTO cliente_laser_regioes (cliente_id, regiao_id) VALUES (?,?)');
+  regiaoIds.forEach(rid => ins.run(clienteId, rid));
+});
+
+// ─── PROCEDIMENTOS INTERESSE ─────────────────────────────────
+ipcMain.handle('cliente:getProcInteresse', (_, clienteId) => {
+  return getDb().prepare(`
+    SELECT procedimento_id FROM cliente_procedimentos_interesse
+    WHERE cliente_id = ?
+  `).all(clienteId).map(r => r.procedimento_id);
+});
+
+ipcMain.handle('cliente:salvarProcInteresse', (_, { clienteId, procedimentoIds }) => {
+  const db = getDb();
+  db.prepare('DELETE FROM cliente_procedimentos_interesse WHERE cliente_id=?').run(clienteId);
+  const ins = db.prepare('INSERT INTO cliente_procedimentos_interesse (cliente_id, procedimento_id) VALUES (?,?)');
+  procedimentoIds.forEach(pid => ins.run(clienteId, pid));
+});

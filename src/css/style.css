@@ -524,6 +524,17 @@ textarea {
   background: #fce4f3;
 }
 
+.btn-rosa {
+  background: var(--rosa);
+  color: var(--rosa-dark);
+  border: 1px solid var(--rosa-dark);
+  font-weight: 600;
+}
+.btn-rosa:hover {
+  background: var(--rosa-dark);
+  color: white;
+}
+
 .cal-day .dia-num {
   font-size: 12px;
   font-weight: 600;
@@ -559,17 +570,8 @@ textarea {
 }
 
 /* Calendário semana / dia */
-.cal-week {
-  background: var(--surface);
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
-  overflow: hidden;
-}
 
-.cal-week-grid {
-  display: grid;
-  grid-template-columns: 64px repeat(7, minmax(0, 1fr));
-}
+
 
 .cal-week-header {
   display: grid;
@@ -591,11 +593,6 @@ textarea {
   max-height: 600px;
 }
 
-.cal-hour-row {
-  display: grid;
-  border-bottom: 1px solid var(--border);
-  min-height: 52px;
-}
 
 .cal-hour-label {
   padding: 4px 8px;
@@ -624,6 +621,104 @@ textarea {
 
 .cal-agend-block:hover {
   filter: brightness(0.95);
+}
+
+/* ── CALENDÁRIO SEMANA ── */
+.cal-week-wrap {
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.cal-week-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.cal-week-th-hora {
+  width: 60px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+}
+
+.cal-week-th-dia {
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  padding: 10px 6px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.cal-week-th-dia:last-child {
+  border-right: none;
+}
+
+.cal-week-th-dia span {
+  display: block;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.cal-week-th-dia strong {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.cal-week-th-dia.hoje {
+  background: #fce4f3;
+}
+
+.cal-week-th-dia.hoje strong {
+  color: var(--rosa-dark);
+}
+
+.cal-week-hora {
+  width: 60px;
+  padding: 8px 8px 0 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: right;
+  vertical-align: top;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  background: var(--surface);
+}
+
+.cal-week-cell {
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 3px;
+  vertical-align: top;
+  height: 52px;
+}
+
+.cal-week-cell:last-child {
+  border-right: none;
+}
+
+.cal-agend-block {
+  background: var(--rosa);
+  color: var(--rosa-dark);
+  border-radius: 6px;
+  padding: 3px 7px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: filter 0.15s;
+}
+
+.cal-agend-block:hover {
+  filter: brightness(0.93);
 }
 
 /* ── TOAST ── */

@@ -83,24 +83,25 @@
 </div>
 
 <!-- ═══ MODAL CLIENTE (Ficha de Anamnese) ═══ -->
+<!-- ═══ MODAL CLIENTE (Ficha de Anamnese) ═══ -->
 <div id="modal-cliente" class="modal-overlay hidden">
   <div class="modal modal-lg">
     <div class="modal-header">
       <h2 id="modal-cliente-title">Nova Ficha de Anamnese</h2>
       <button class="modal-close" onclick="fecharModal('modal-cliente')">✕</button>
     </div>
-    <div class="modal-body">
+    <div class="modal-body" style="min-height:480px">
       <input type="hidden" id="cli-id"/>
 
       <div class="tabs">
         <button class="tab-btn active" onclick="switchTab('tab-dados',this)">📋 Dados Pessoais</button>
-        <button class="tab-btn" onclick="switchTab('tab-depil',this)">🪒 Depilação</button>
+        <button class="tab-btn" onclick="switchTab('tab-proc',this)">💆 Procedimentos</button>
         <button class="tab-btn" onclick="switchTab('tab-saude',this)">🏥 Saúde</button>
         <button class="tab-btn" onclick="switchTab('tab-fisico',this)">🧬 Físico / Pele</button>
       </div>
 
-      <!-- ABA 1 -->
-      <div id="tab-dados" class="tab-content">
+      <!-- ABA 1 — DADOS PESSOAIS (sem alteração) -->
+      <div id="tab-dados" class="tab-content" style="min-height:420px">
         <div class="form-row">
           <div class="form-group" style="grid-column:1/-1">
             <label>Nome Completo *</label>
@@ -147,33 +148,41 @@
             <input type="text" id="cli-uf" maxlength="2" placeholder="GO"/>
           </div>
         </div>
-        <div class="form-group">
-          <label>Áreas que pretende tratar</label>
-          <input type="text" id="cli-areas" placeholder="Ex: virilha, axilas, pernas..."/>
+      </div>
+
+      <!-- ABA 2 — PROCEDIMENTOS -->
+      <div id="tab-proc" class="tab-content hidden" style="min-height:420px">
+        <p class="section-label">Procedimentos de interesse</p>
+        <div id="cli-proc-interesse-list" class="check-group" style="flex-wrap:wrap;gap:10px">
+          <!-- preenchido via JS -->
+        </div>
+
+        <div id="cli-laser-section" class="hidden" style="margin-top:24px">
+          <p class="section-label">Regiões para Depilação a Laser</p>
+          <div id="cli-laser-regioes-list" class="check-group" style="flex-wrap:wrap;gap:10px">
+            <!-- preenchido via JS -->
+          </div>
+
+          <p class="section-label" style="margin-top:18px">Método de depilação anterior</p>
+          <div class="check-group">
+            <label><input type="checkbox" id="cli-dep-cera"/> Cera</label>
+            <label><input type="checkbox" id="cli-dep-lamina"/> Lâmina</label>
+          </div>
+
+          <p class="section-label" style="margin-top:18px">Problemas anteriores</p>
+          <div class="check-group">
+            <label><input type="checkbox" id="cli-prob-encrav"/> Encravamento</label>
+            <label><input type="checkbox" id="cli-prob-manchas"/> Manchas</label>
+          </div>
+          <div class="form-group" style="margin-top:12px">
+            <label>Outros problemas</label>
+            <input type="text" id="cli-prob-outros" placeholder="Descreva se houver"/>
+          </div>
         </div>
       </div>
 
-      <!-- ABA 2 -->
-      <div id="tab-depil" class="tab-content hidden">
-        <p class="section-label">Método de depilação anterior</p>
-        <div class="check-group">
-          <label><input type="checkbox" id="cli-dep-cera"/> Cera</label>
-          <label><input type="checkbox" id="cli-dep-lamina"/> Lâmina</label>
-          <label><input type="checkbox" id="cli-dep-laser"/> Laser / Luz pulsada / Fotodepilação</label>
-        </div>
-        <p class="section-label" style="margin-top:18px">Problemas anteriores</p>
-        <div class="check-group">
-          <label><input type="checkbox" id="cli-prob-encrav"/> Encravamento</label>
-          <label><input type="checkbox" id="cli-prob-manchas"/> Manchas</label>
-        </div>
-        <div class="form-group" style="margin-top:12px">
-          <label>Outros problemas</label>
-          <input type="text" id="cli-prob-outros" placeholder="Descreva se houver"/>
-        </div>
-      </div>
-
-      <!-- ABA 3 -->
-      <div id="tab-saude" class="tab-content hidden">
+      <!-- ABA 3 — SAÚDE (sem alteração) -->
+      <div id="tab-saude" class="tab-content hidden" style="min-height:420px">
         <div class="anamnese-row">
           <span>Medicamento em uso?</span>
           <label><input type="radio" name="r-med" value="1"/> Sim</label>
@@ -258,20 +267,45 @@
         </div>
       </div>
 
-      <!-- ABA 4 -->
-      <div id="tab-fisico" class="tab-content hidden">
+      <!-- ABA 4 — FÍSICO / PELE -->
+      <div id="tab-fisico" class="tab-content hidden" style="min-height:420px">
         <div class="form-row">
           <div class="form-group">
             <label>Cor dos olhos</label>
-            <input type="text" id="cli-olhos" placeholder="Ex: castanhos"/>
+            <select id="cli-olhos">
+              <option value="">Selecione</option>
+              <option>Castanhos</option>
+              <option>Pretos</option>
+              <option>Verdes</option>
+              <option>Azuis</option>
+              <option>Mel</option>
+              <option>Cinzas</option>
+            </select>
           </div>
           <div class="form-group">
             <label>Cor dos cabelos</label>
-            <input type="text" id="cli-cabelos" placeholder="Ex: pretos"/>
+            <select id="cli-cabelos">
+              <option value="">Selecione</option>
+              <option>Pretos</option>
+              <option>Castanho escuro</option>
+              <option>Castanho claro</option>
+              <option>Loiros</option>
+              <option>Ruivos</option>
+              <option>Grisalhos</option>
+              <option>Brancos</option>
+            </select>
           </div>
           <div class="form-group">
             <label>Cor dos pelos</label>
-            <input type="text" id="cli-pelos" placeholder="Ex: negros"/>
+            <select id="cli-pelos">
+              <option value="">Selecione</option>
+              <option>Negros</option>
+              <option>Castanhos</option>
+              <option>Loiros</option>
+              <option>Ruivos</option>
+              <option>Grisalhos</option>
+              <option>Brancos/Finos</option>
+            </select>
           </div>
         </div>
         <div class="anamnese-row" style="margin-top:8px">
@@ -280,17 +314,22 @@
           <label><input type="radio" name="r-sol" value="0" checked/> Não</label>
           <input type="text" id="cli-sol-quando" placeholder="Quando?" class="inline-input"/>
         </div>
-        <div class="form-group" style="margin-top:20px">
-          <label>Classificação Fitzpatrick — Como sua pele reage ao sol?</label>
-          <div class="fitzpatrick-grid">
-            <label class="fitz-option"><input type="radio" name="r-fitz" value="1"/> <span><strong>Tipo I</strong> — Sempre queima, nunca bronzeia</span></label>
-            <label class="fitz-option"><input type="radio" name="r-fitz" value="2"/> <span><strong>Tipo II</strong> — Sempre queima, bronzeia com dificuldade</span></label>
-            <label class="fitz-option"><input type="radio" name="r-fitz" value="3"/> <span><strong>Tipo III</strong> — Às vezes queima, sempre bronzeia</span></label>
-            <label class="fitz-option"><input type="radio" name="r-fitz" value="4"/> <span><strong>Tipo IV</strong> — Raramente queima, bronzeia facilmente</span></label>
-            <label class="fitz-option"><input type="radio" name="r-fitz" value="5"/> <span><strong>Tipo V</strong> — Queima muito raramente, bronzeia muito facilmente</span></label>
-            <label class="fitz-option"><input type="radio" name="r-fitz" value="6"/> <span><strong>Tipo VI</strong> — Nunca queima, bronzeia muito facilmente</span></label>
+
+        <!-- Fitzpatrick só aparece se tiver laser -->
+        <div id="cli-fitz-section" class="hidden">
+          <div class="form-group" style="margin-top:20px">
+            <label>Classificação Fitzpatrick — Como sua pele reage ao sol?</label>
+            <div class="fitzpatrick-grid">
+              <label class="fitz-option"><input type="radio" name="r-fitz" value="1"/> <span><strong>Tipo I</strong> — Sempre queima, nunca bronzeia</span></label>
+              <label class="fitz-option"><input type="radio" name="r-fitz" value="2"/> <span><strong>Tipo II</strong> — Sempre queima, bronzeia com dificuldade</span></label>
+              <label class="fitz-option"><input type="radio" name="r-fitz" value="3"/> <span><strong>Tipo III</strong> — Às vezes queima, sempre bronzeia</span></label>
+              <label class="fitz-option"><input type="radio" name="r-fitz" value="4"/> <span><strong>Tipo IV</strong> — Raramente queima, bronzeia facilmente</span></label>
+              <label class="fitz-option"><input type="radio" name="r-fitz" value="5"/> <span><strong>Tipo V</strong> — Queima muito raramente, bronzeia muito facilmente</span></label>
+              <label class="fitz-option"><input type="radio" name="r-fitz" value="6"/> <span><strong>Tipo VI</strong> — Nunca queima, bronzeia muito facilmente</span></label>
+            </div>
           </div>
         </div>
+
         <div class="anamnese-row" style="margin-top:16px">
           <label style="font-weight:600; color:var(--rosa-dark)">
             <input type="checkbox" id="cli-termo"/>
@@ -299,7 +338,7 @@
         </div>
       </div>
 
-    </div><!-- fim modal-body -->
+    </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="fecharModal('modal-cliente')">Cancelar</button>
       <button class="btn btn-primary" onclick="salvarCliente()">💾 Salvar Ficha</button>

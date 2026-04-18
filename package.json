@@ -4,10 +4,13 @@
   "description": "Sistema de Agendamento para Clínica de Estética",
   "main": "main/main.js",
   "scripts": {
-    "start": "electron .",
-    "rebuild": "electron-rebuild -f -w better-sqlite3",
-    "postinstall": "electron-rebuild -f -w better-sqlite3",
-    "build": "electron-builder --win nsis --x64"
+  "start": "electron .",
+  "dev": "cross-env NODE_ENV=development electron .",
+  "rebuild": "electron-rebuild -f -w better-sqlite3",
+  "postinstall": "electron-builder install-app-deps",
+  "build": "electron-builder --win nsis --x64",
+  "seed": "sqlite3 ~/.config/clinica-estetica/clinica.db < seed-clientes.sql"
+
   },
   "build": {
     "appId": "com.clinica.estetica",
@@ -31,9 +34,11 @@
     ]
   },
   "devDependencies": {
-    "@electron/rebuild": "^3.7.2",
-    "electron": "^28.3.3",
-    "electron-builder": "^24.0.0"
+  "@electron/rebuild": "^3.7.2",
+  "cross-env": "^10.1.0",
+  "electron": "^28.3.3",
+  "electron-builder": "^24.0.0",
+  "electron-reloader": "^1.2.3"
   },
   "dependencies": {
     "better-sqlite3": "^9.4.3"
