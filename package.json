@@ -5,42 +5,35 @@
   "main": "main/main.js",
   "scripts": {
     "start": "electron .",
-    "dev": "cross-env NODE_ENV=development electron .",
-    "build": "electron-builder --win",
-    "seed": "sqlite3 ~/.config/clinica-estetica/clinica.db < seed-clientes.sql",
-    "postinstall": "electron-rebuild -f -w better-sqlite3"
+    "rebuild": "electron-rebuild -f -w better-sqlite3",
+    "postinstall": "electron-rebuild -f -w better-sqlite3",
+    "build": "electron-builder --win nsis --x64"
   },
   "build": {
     "appId": "com.clinica.estetica",
     "productName": "Clínica Estética",
     "win": {
-      "target": "nsis",
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
       "icon": "assets/icon.ico"
     },
     "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Clínica Estética"
     },
     "files": [
       "main/**/*",
       "src/**/*",
       "assets/**/*",
-      "node_modules/**/*"
-    ],
-    "extraResources": [
-      {
-        "from": "assets/",
-        "to": "assets/"
-      }
+      "package.json"
     ]
   },
   "devDependencies": {
     "@electron/rebuild": "^3.7.2",
-    "cross-env": "^10.1.0",
     "electron": "^28.3.3",
-    "electron-builder": "^24.0.0",
-    "electron-reload": "^2.0.0-alpha.1",
-    "electron-reloader": "^1.2.3"
+    "electron-builder": "^24.0.0"
   },
   "dependencies": {
     "better-sqlite3": "^9.4.3"

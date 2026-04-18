@@ -1,3 +1,5 @@
+app.commandLine.appendSwitch('lang', 'pt-BR');
+
 const { app, BrowserWindow, ipcMain, Notification, shell } = require('electron');
 const path = require('path');
 const { getDb } = require('./database');
