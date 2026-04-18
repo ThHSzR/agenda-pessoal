@@ -5,6 +5,7 @@
   "main": "main/main.js",
   "scripts": {
     "start": "electron .",
+    "dev": "cross-env NODE_ENV=development electron .",
     "build": "electron-builder --win",
     "seed": "sqlite3 ~/.config/clinica-estetica/clinica.db < seed-clientes.sql",
     "postinstall": "electron-rebuild -f -w better-sqlite3"
@@ -35,8 +36,11 @@
   },
   "devDependencies": {
     "@electron/rebuild": "^3.7.2",
+    "cross-env": "^10.1.0",
     "electron": "^28.3.3",
-    "electron-builder": "^24.0.0"
+    "electron-builder": "^24.0.0",
+    "electron-reload": "^2.0.0-alpha.1",
+    "electron-reloader": "^1.2.3"
   },
   "dependencies": {
     "better-sqlite3": "^9.4.3"

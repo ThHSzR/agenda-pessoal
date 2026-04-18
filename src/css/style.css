@@ -1,9 +1,10 @@
 .hidden { display: none !important; }
 
 :root {
-  --rosa:        #e91e8c;
+  --rosa:        #d8a8c3;
+  --rosa-botao:  #af45b7;
   --rosa-light:  #f8b4d9;
-  --rosa-dark:   #c2186e;
+  --rosa-dark:   #af45b7;
   --bg:          #fdf6fb;
   --surface:     #ffffff;
   --surface-2:   #fef0f8;
@@ -34,12 +35,22 @@ html, body { height: 100%; font-family: 'Segoe UI', sans-serif; background: var(
 }
 
 #sidebar .brand {
-  padding: 24px 20px 20px;
-  font-size: 16px; font-weight: 700;
+  padding: 16px 12px;
   border-bottom: 1px solid rgba(255,255,255,0.2);
-  line-height: 1.3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-#sidebar .brand small { font-size: 11px; font-weight: 400; opacity: 0.8; display: block; }
+
+.sidebar-logo {
+  width: 100%;
+  max-width: 190px;
+  height: auto;
+  object-fit: contain;
+  border-radius: 6px;
+  background: white;
+  padding: 8px 10px;
+}
 
 #sidebar nav { flex: 1; padding: 12px 0; }
 #sidebar nav a {
@@ -75,7 +86,7 @@ html, body { height: 100%; font-family: 'Segoe UI', sans-serif; background: var(
 }
 .btn:hover { filter: brightness(0.92); }
 .btn:active { transform: scale(0.97); }
-.btn-primary   { background: var(--rosa); color: white; }
+.btn-primary   { background: var(--rosa-botao); color: white; }
 .btn-secondary { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
 .btn-success   { background: #e8f5e9; color: var(--success); border: 1px solid #a5d6a7; }
 .btn-danger    { background: #ffebee; color: var(--danger); border: 1px solid #ef9a9a; }
@@ -180,13 +191,13 @@ textarea { resize: vertical; min-height: 70px; }
 .cal-toolbar h2 { font-size: 16px; font-weight: 700; flex: 1; }
 .cal-view-btns { display: flex; gap: 6px; }
 .cal-view-btns button { padding: 6px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); cursor: pointer; font-size: 13px; transition: background 0.15s; }
-.cal-view-btns button.active { background: var(--rosa); color: white; border-color: var(--rosa); }
+.cal-view-btns button.active { background: var(--rosa-botao); color: white; border-color: var(--rosa); }
 
 /* Calendário mês */
-.cal-month { background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border); overflow: hidden; }
-.cal-month-header { display: grid; grid-template-columns: repeat(7, 1fr); background: var(--surface-2); border-bottom: 1px solid var(--border); }
+.cal-month { background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border); overflow: visible; }
+.cal-month-header { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); background: var(--surface-2); border-bottom: 1px solid var(--border); }
 .cal-month-header div { text-align: center; padding: 8px; font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); }
-.cal-month-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
+.cal-month-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
 .cal-day {
   min-height: 90px; padding: 6px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);
   cursor: pointer; transition: background 0.12s;
@@ -202,7 +213,7 @@ textarea { resize: vertical; min-height: 70px; }
   margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   cursor: pointer;
 }
-.cal-evento.concluido { background: #c8e6c9; color: #1b5e20; }
+.cal-evento.concluido { background: #c8e6c9; color: #1b5e10; }
 .cal-evento.cancelado { background: #ffcdd2; color: #b71c1c; }
 
 /* Calendário semana / dia */

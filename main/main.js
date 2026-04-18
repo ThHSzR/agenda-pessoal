@@ -2,6 +2,10 @@ const { app, BrowserWindow, ipcMain, Notification, shell } = require('electron')
 const path = require('path');
 const { getDb } = require('./database');
 
+try {
+  require('electron-reloader')(module, { watchRenderer: true });
+} catch (_) {}
+
 let mainWindow;
 
 function createWindow() {

@@ -1,4 +1,4 @@
-let calView = 'mes';
+let calView = 'dia';
 let calDate = new Date();
 
 async function renderCalendario() {
@@ -17,9 +17,9 @@ async function renderCalendario() {
         <h2 id="cal-titulo" style="text-transform:capitalize">${mesNome}</h2>
         <button class="btn btn-secondary btn-sm" onclick="calNav(1)">Próximo ›</button>
         <div class="cal-view-btns">
-          <button onclick="calMudarView('mes')"    class="${calView==='mes'?'active':''}">Mês</button>
-          <button onclick="calMudarView('semana')" class="${calView==='semana'?'active':''}">Semana</button>
           <button onclick="calMudarView('dia')"    class="${calView==='dia'?'active':''}">Dia</button>
+          <button onclick="calMudarView('semana')" class="${calView==='semana'?'active':''}">Semana</button>
+          <button onclick="calMudarView('mes')"    class="${calView==='mes'?'active':''}">Mês</button>
         </div>
         <button class="btn btn-secondary btn-sm" onclick="calHoje()">Hoje</button>
       </div>
