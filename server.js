@@ -1,8 +1,9 @@
-const express        = require('express');
-const session        = require('express-session');
-const bcrypt         = require('bcryptjs');
-const path           = require('path');
-const { getDb }      = require('./server/database');
+const express   = require('express');
+const session   = require('express-session');
+const bcrypt    = require('bcryptjs');
+const path      = require('path');
+const rateLimit = require('express-rate-limit');
+const { getDb } = require('./server/database');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -11,34 +12,17 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'src')));
 
 app.use(session({
-  secret: 'agenda-secreta-2025',
-  resave: false,
-  saveUninitialized: false,
-  cookie: { maxAge: 8 * 60 * 60 * 1000 }
-}));
-
-function auth(req, res, next) {
-  if (req.session?.logado) return next();
-  res.status(401).json({ erro: 'Não autenticado' });
-}
-
-// No topo, adicione:
-const rateLimit = require('express-rate-limit');
-
-// Substitua o bloco app.use(session({...})) por:
-app.use(session({
   secret: process.env.SESSION_SECRET || 'dev-secret-troque-em-producao',
   resave: false,
   saveUninitialized: false,
   cookie: {
-    httpOnly: true,          // JS do browser não acessa o cookie
-    secure: false,           // mude para true se usar HTTPS
+    httpOnly: true,
+    secure: false,
     sameSite: 'strict',
     maxAge: 8 * 60 * 60 * 1000
   }
 }));
 
-// Rate limit: máx 10 tentativas de login por 15 min por IP
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
@@ -47,43 +31,47 @@ const loginLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// Middleware de auth normal
+// ── Middlewares de acesso ─────────────────────────────────────
 function auth(req, res, next) {
   if (req.session?.logado) return next();
   res.status(401).json({ erro: 'Não autenticado' });
 }
 
-// Middleware exclusivo para admin
 function authAdmin(req, res, next) {
   if (req.session?.logado && req.session?.is_admin) return next();
   res.status(403).json({ erro: 'Acesso negado' });
 }
 
-// ─── AUTH ────────────────────────────────────────────────────
+// admin OU gerente
+function authGerente(req, res, next) {
+  if (req.session?.logado && (req.session?.is_admin || req.session?.cargo === 'gerente')) return next();
+  res.status(403).json({ erro: 'Acesso negado' });
+}
+
+// ── AUTH ──────────────────────────────────────────────────────
 app.post('/api/login', loginLimiter, (req, res) => {
   const { usuario, senha } = req.body;
   if (!usuario || !senha)
     return res.status(400).json({ erro: 'Preencha usuário e senha' });
 
   const db = getDb();
-
-  // cria admin padrão apenas se não existe nenhum usuário
   const total = db.prepare('SELECT COUNT(*) as n FROM usuarios').get().n;
   if (total === 0) {
-    db.prepare('INSERT INTO usuarios (usuario, senha, is_admin) VALUES (?,?,1)')
-      .run('admin', bcrypt.hashSync('admin123', 12));
+    db.prepare('INSERT INTO usuarios (usuario, senha, is_admin, cargo) VALUES (?,?,1,?)')
+      .run('admin', bcrypt.hashSync('admin123', 12), 'admin');
   }
 
   const user = db.prepare('SELECT * FROM usuarios WHERE usuario=?').get(usuario);
   if (!user || !bcrypt.compareSync(senha, user.senha))
     return res.status(401).json({ erro: 'Usuário ou senha incorretos' });
 
-  req.session.regenerate((err) => {           // previne session fixation
+  req.session.regenerate((err) => {
     if (err) return res.status(500).json({ erro: 'Erro interno' });
     req.session.logado   = true;
     req.session.usuario  = user.usuario;
     req.session.is_admin = !!user.is_admin;
-    res.json({ ok: true, is_admin: !!user.is_admin });
+    req.session.cargo    = user.cargo || 'operador';
+    res.json({ ok: true, is_admin: !!user.is_admin, cargo: req.session.cargo });
   });
 });
 
@@ -93,32 +81,35 @@ app.post('/api/logout', auth, (req, res) => {
 
 app.get('/api/me', (req, res) => {
   if (req.session?.logado)
-    return res.json({ usuario: req.session.usuario, is_admin: !!req.session.is_admin });
+    return res.json({
+      usuario:  req.session.usuario,
+      is_admin: !!req.session.is_admin,
+      cargo:    req.session.cargo || 'operador'
+    });
   res.status(401).json({ erro: 'Não autenticado' });
 });
 
-// ─── USUÁRIOS (apenas admin) ─────────────────────────────────
+// ── USUÁRIOS (apenas admin) ───────────────────────────────────
 app.get('/api/usuarios', authAdmin, (req, res) => {
-  // nunca retorna a senha
   res.json(getDb().prepare(
-    'SELECT id, usuario, is_admin, criado_em FROM usuarios ORDER BY usuario'
+    'SELECT id, usuario, is_admin, cargo FROM usuarios ORDER BY usuario'
   ).all());
 });
 
 app.post('/api/usuarios', authAdmin, (req, res) => {
-  const { usuario, senha, is_admin } = req.body;
+  const { usuario, senha, is_admin, cargo } = req.body;
   if (!usuario || !senha)
     return res.status(400).json({ erro: 'Usuário e senha são obrigatórios' });
   if (senha.length < 6)
     return res.status(400).json({ erro: 'Senha mínima: 6 caracteres' });
 
   const db = getDb();
-  const existe = db.prepare('SELECT id FROM usuarios WHERE usuario=?').get(usuario);
-  if (existe) return res.status(409).json({ erro: 'Usuário já existe' });
+  if (db.prepare('SELECT id FROM usuarios WHERE usuario=?').get(usuario))
+    return res.status(409).json({ erro: 'Usuário já existe' });
 
-  const hash = bcrypt.hashSync(senha, 12);
-  const r = db.prepare('INSERT INTO usuarios (usuario, senha, is_admin) VALUES (?,?,?)')
-    .run(usuario, hash, is_admin ? 1 : 0);
+  const cargoFinal = is_admin ? 'admin' : (cargo === 'gerente' ? 'gerente' : 'operador');
+  const r = db.prepare('INSERT INTO usuarios (usuario, senha, is_admin, cargo) VALUES (?,?,?,?)')
+    .run(usuario, bcrypt.hashSync(senha, 12), is_admin ? 1 : 0, cargoFinal);
   res.json({ id: r.lastInsertRowid });
 });
 
@@ -132,34 +123,19 @@ app.patch('/api/usuarios/:id/senha', authAdmin, (req, res) => {
 });
 
 app.delete('/api/usuarios/:id', authAdmin, (req, res) => {
-  const db = getDb();
-  // não pode excluir a si mesmo
-  const alvo = db.prepare('SELECT usuario FROM usuarios WHERE id=?').get(req.params.id);
+  const db  = getDb();
+  const alvo = db.prepare('SELECT usuario, is_admin FROM usuarios WHERE id=?').get(req.params.id);
   if (!alvo) return res.status(404).json({ erro: 'Não encontrado' });
   if (alvo.usuario === req.session.usuario)
     return res.status(400).json({ erro: 'Você não pode excluir sua própria conta' });
-
-  // garante que sempre sobra ao menos 1 admin
-  const totalAdmins = db.prepare("SELECT COUNT(*) as n FROM usuarios WHERE is_admin=1").get().n;
-  const eAdmin = db.prepare('SELECT is_admin FROM usuarios WHERE id=?').get(req.params.id)?.is_admin;
-  if (eAdmin && totalAdmins <= 1)
+  if (alvo.is_admin && db.prepare('SELECT COUNT(*) as n FROM usuarios WHERE is_admin=1').get().n <= 1)
     return res.status(400).json({ erro: 'Não é possível remover o único administrador' });
 
   db.prepare('DELETE FROM usuarios WHERE id=?').run(req.params.id);
   res.json({ ok: true });
 });
 
-app.post('/api/logout', (req, res) => {
-  req.session.destroy();
-  res.json({ ok: true });
-});
-
-app.get('/api/me', (req, res) => {
-  if (req.session?.logado) return res.json({ usuario: req.session.usuario });
-  res.status(401).json({ erro: 'Não autenticado' });
-});
-
-// ─── CLIENTES ────────────────────────────────────────────────
+// ── CLIENTES ──────────────────────────────────────────────────
 app.get('/api/clientes', auth, (req, res) => {
   res.json(getDb().prepare('SELECT * FROM clientes ORDER BY nome').all());
 });
@@ -202,7 +178,7 @@ app.delete('/api/clientes/:id', auth, (req, res) => {
   res.json({ ok: true });
 });
 
-// ─── PROCEDIMENTOS ───────────────────────────────────────────
+// ── PROCEDIMENTOS (auth + gerente/admin para escrita) ─────────
 app.get('/api/procedimentos', auth, (req, res) => {
   const sql = req.query.todos === '1'
     ? 'SELECT * FROM procedimentos ORDER BY nome'
@@ -210,50 +186,50 @@ app.get('/api/procedimentos', auth, (req, res) => {
   res.json(getDb().prepare(sql).all());
 });
 
-app.post('/api/procedimentos', auth, (req, res) => {
+app.post('/api/procedimentos', authGerente, (req, res) => {
   const db = getDb(), d = req.body;
   if (d.id) {
-    db.prepare(`UPDATE procedimentos SET nome=?,descricao=?,duracao_min=?,valor=?,ativo=?,is_laser=?,tem_variantes=? WHERE id=?`)
+    db.prepare('UPDATE procedimentos SET nome=?,descricao=?,duracao_min=?,valor=?,ativo=?,is_laser=?,tem_variantes=? WHERE id=?')
       .run(d.nome, d.descricao, d.duracao_min, d.valor, d.ativo??1, d.is_laser??0, d.tem_variantes??0, d.id);
     res.json({ id: d.id });
   } else {
-    const r = db.prepare(`INSERT INTO procedimentos (nome,descricao,duracao_min,valor,is_laser,tem_variantes) VALUES (?,?,?,?,?,?)`)
+    const r = db.prepare('INSERT INTO procedimentos (nome,descricao,duracao_min,valor,is_laser,tem_variantes) VALUES (?,?,?,?,?,?)')
       .run(d.nome, d.descricao, d.duracao_min, d.valor, d.is_laser??0, d.tem_variantes??0);
     res.json({ id: r.lastInsertRowid });
   }
 });
 
-app.delete('/api/procedimentos/:id', auth, (req, res) => {
+app.delete('/api/procedimentos/:id', authGerente, (req, res) => {
   getDb().prepare('UPDATE procedimentos SET ativo=0 WHERE id=?').run(req.params.id);
   res.json({ ok: true });
 });
 
-// ─── VARIANTES ───────────────────────────────────────────────
+// ── VARIANTES (mesmo controle que procedimentos) ──────────────
 app.get('/api/variantes/:procId', auth, (req, res) => {
   res.json(getDb().prepare(
     'SELECT * FROM procedimento_variantes WHERE procedimento_id=? ORDER BY nome'
   ).all(req.params.procId));
 });
 
-app.post('/api/variantes', auth, (req, res) => {
+app.post('/api/variantes', authGerente, (req, res) => {
   const db = getDb(), d = req.body;
   if (d.id) {
-    db.prepare(`UPDATE procedimento_variantes SET nome=?,descricao=?,duracao_min=?,valor=?,ativo=? WHERE id=?`)
+    db.prepare('UPDATE procedimento_variantes SET nome=?,descricao=?,duracao_min=?,valor=?,ativo=? WHERE id=?')
       .run(d.nome, d.descricao, d.duracao_min, d.valor, d.ativo??1, d.id);
     res.json({ id: d.id });
   } else {
-    const r = db.prepare(`INSERT INTO procedimento_variantes (procedimento_id,nome,descricao,duracao_min,valor) VALUES (?,?,?,?,?)`)
+    const r = db.prepare('INSERT INTO procedimento_variantes (procedimento_id,nome,descricao,duracao_min,valor) VALUES (?,?,?,?,?)')
       .run(d.procedimento_id, d.nome, d.descricao, d.duracao_min, d.valor);
     res.json({ id: r.lastInsertRowid });
   }
 });
 
-app.delete('/api/variantes/:id', auth, (req, res) => {
+app.delete('/api/variantes/:id', authGerente, (req, res) => {
   getDb().prepare('DELETE FROM procedimento_variantes WHERE id=?').run(req.params.id);
   res.json({ ok: true });
 });
 
-// ─── AGENDAMENTOS ────────────────────────────────────────────
+// ── AGENDAMENTOS ──────────────────────────────────────────────
 app.get('/api/agendamentos', auth, (req, res) => {
   const { data, data_inicio, data_fim } = req.query;
   let sql = `
@@ -289,11 +265,11 @@ app.get('/api/agendamentos/:id', auth, (req, res) => {
 app.post('/api/agendamentos', auth, (req, res) => {
   const db = getDb(), d = req.body;
   if (d.id) {
-    db.prepare(`UPDATE agendamentos SET cliente_id=?,procedimento_id=?,variante_id=?,data_hora=?,status=?,valor_cobrado=?,observacoes=? WHERE id=?`)
+    db.prepare('UPDATE agendamentos SET cliente_id=?,procedimento_id=?,variante_id=?,data_hora=?,status=?,valor_cobrado=?,observacoes=? WHERE id=?')
       .run(d.cliente_id, d.procedimento_id, d.variante_id||null, d.data_hora, d.status, d.valor_cobrado, d.observacoes, d.id);
     res.json({ id: d.id });
   } else {
-    const r = db.prepare(`INSERT INTO agendamentos (cliente_id,procedimento_id,variante_id,data_hora,status,valor_cobrado,observacoes) VALUES (?,?,?,?,?,?,?)`)
+    const r = db.prepare('INSERT INTO agendamentos (cliente_id,procedimento_id,variante_id,data_hora,status,valor_cobrado,observacoes) VALUES (?,?,?,?,?,?,?)')
       .run(d.cliente_id, d.procedimento_id, d.variante_id||null, d.data_hora, d.status||'agendado', d.valor_cobrado, d.observacoes);
     res.json({ id: r.lastInsertRowid });
   }
@@ -309,7 +285,7 @@ app.patch('/api/agendamentos/:id/status', auth, (req, res) => {
   res.json({ ok: true });
 });
 
-// ─── FINANCEIRO ──────────────────────────────────────────────
+// ── FINANCEIRO ────────────────────────────────────────────────
 app.get('/api/financeiro/resumo', auth, (req, res) => {
   const { inicio, fim } = req.query;
   res.json(getDb().prepare(`
@@ -334,7 +310,7 @@ app.get('/api/financeiro/detalhado', auth, (req, res) => {
   `).all(inicio, fim));
 });
 
-// ─── INTERESSES ──────────────────────────────────────────────
+// ── INTERESSES ────────────────────────────────────────────────
 app.get('/api/cliente-proc/:clienteId', auth, (req, res) => {
   res.json(getDb().prepare(
     'SELECT procedimento_id FROM cliente_procedimentos_interesse WHERE cliente_id=?'
@@ -363,12 +339,11 @@ app.post('/api/cliente-variantes', auth, (req, res) => {
   res.json({ ok: true });
 });
 
-// ─── SPA FALLBACK ────────────────────────────────────────────
+// ── SPA FALLBACK ──────────────────────────────────────────────
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'src', 'index.html'));
 });
 
 app.listen(PORT, () => {
   console.log(`✅ Agenda rodando em http://localhost:${PORT}`);
-  console.log(`   Login padrão: admin / admin123`);
 });

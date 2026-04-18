@@ -1,17 +1,17 @@
 const paginas = {
-  calendario:    renderCalendario,
-  agendamentos:  renderAgendamentos,
-  clientes:      renderClientes,
+  calendario: renderCalendario,
+  agendamentos: renderAgendamentos,
+  clientes: renderClientes,
   procedimentos: renderProcedimentos,
-  financeiro:    renderFinanceiro,
-  usuarios:      renderUsuarios,   // ← estava faltando
+  financeiro: renderFinanceiro,
+  usuarios: renderUsuarios,   // ← estava faltando
 };
 
 let paginaAtual = 'calendario';
 
 function navegar(pagina) {
   const pageEl = document.getElementById(`page-${pagina}`);
-  const navEl  = document.querySelector(`[data-page="${pagina}"]`);
+  const navEl = document.querySelector(`[data-page="${pagina}"]`);
   if (!pageEl || !navEl) return;  // página ainda não existe no DOM → ignora
 
   document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
@@ -34,6 +34,14 @@ document.querySelectorAll('.nav-link').forEach(a => {
   const res = await fetch('/api/me', { credentials: 'same-origin' });
   if (!res.ok) { window.location.href = '/login.html'; return; }
   const { usuario, is_admin } = await res.json();
+
+  // No bloco async, depois de: const { usuario, is_admin, cargo } = await res.json();
+
+  // Esconde aba Procedimentos para quem não é admin nem gerente
+  if (!is_admin && cargo !== 'gerente') {
+    const linkProc = document.querySelector('[data-page="procedimentos"]');
+    if (linkProc) linkProc.style.display = 'none';
+  }
 
   // Nome do usuário na sidebar
   const brand = document.querySelector('#sidebar .brand');

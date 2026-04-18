@@ -3,6 +3,12 @@ async function renderUsuarios() {
   const page  = document.getElementById('page-usuarios');
   if (!page) return;
 
+  const badgeCargo = (u) => {
+    if (u.is_admin)             return '<span style="color:#7c3aed;font-weight:600">👑 Admin</span>';
+    if (u.cargo === 'gerente')  return '<span style="color:#0891b2;font-weight:600">🔑 Gerente</span>';
+    return '<span style="color:#6b7280">Operador</span>';
+  };
+
   page.innerHTML = `
     <div class="page-header">
       <h1>⚙️ Usuários</h1>
@@ -11,14 +17,13 @@ async function renderUsuarios() {
     <div class="card">
       <table>
         <thead>
-          <tr><th>Usuário</th><th>Admin</th><th>Criado em</th><th>Ações</th></tr>
+          <tr><th>Usuário</th><th>Cargo</th><th>Ações</th></tr>
         </thead>
         <tbody>
           ${lista.map(u => `
             <tr>
               <td><strong>${u.usuario}</strong></td>
-              <td>${u.is_admin ? '✅ Sim' : 'Não'}</td>
-              <td>${u.criado_em || '-'}</td>
+              <td>${badgeCargo(u)}</td>
               <td>
                 <button class="btn btn-info btn-sm" onclick="abrirTrocarSenha(${u.id}, '${u.usuario}')">🔑 Senha</button>
                 <button class="btn btn-danger btn-sm" onclick="excluirUsuario(${u.id}, '${u.usuario}')">🗑️</button>
@@ -48,10 +53,13 @@ async function renderUsuarios() {
             <label>Confirmar Senha *</label>
             <input type="password" id="nou-senha2" autocomplete="new-password"/>
           </div>
-          <div class="check-group" style="margin-top:12px">
-            <label>
-              <input type="checkbox" id="nou-admin"/> É administrador
-            </label>
+          <div class="form-group">
+            <label>Cargo *</label>
+            <select id="nou-cargo">
+              <option value="operador">Operador — acesso geral</option>
+              <option value="gerente">Gerente — acesso geral + editar procedimentos</option>
+              <option value="admin">Administrador — acesso total</option>
+            </select>
           </div>
         </div>
         <div class="modal-footer">
@@ -92,21 +100,22 @@ function abrirNovoUsuario() {
   document.getElementById('nou-usuario').value = '';
   document.getElementById('nou-senha').value   = '';
   document.getElementById('nou-senha2').value  = '';
-  document.getElementById('nou-admin').checked = false;
+  document.getElementById('nou-cargo').value   = 'operador';
   abrirModal('modal-usuario');
 }
 
 async function salvarUsuario() {
-  const usuario  = document.getElementById('nou-usuario').value.trim();
-  const senha    = document.getElementById('nou-senha').value;
-  const senha2   = document.getElementById('nou-senha2').value;
-  const is_admin = document.getElementById('nou-admin').checked;
+  const usuario = document.getElementById('nou-usuario').value.trim();
+  const senha   = document.getElementById('nou-senha').value;
+  const senha2  = document.getElementById('nou-senha2').value;
+  const cargo   = document.getElementById('nou-cargo').value;
 
-  if (!usuario) { toast('Informe o usuário', 'error'); return; }
-  if (senha.length < 6) { toast('Senha mínima: 6 caracteres', 'error'); return; }
-  if (senha !== senha2) { toast('As senhas não conferem', 'error'); return; }
+  if (!usuario)           { toast('Informe o usuário', 'error');          return; }
+  if (senha.length < 6)   { toast('Senha mínima: 6 caracteres', 'error'); return; }
+  if (senha !== senha2)   { toast('As senhas não conferem', 'error');      return; }
 
-  const res = await window.api.usuarios.criar({ usuario, senha, is_admin });
+  const is_admin = cargo === 'admin';
+  const res = await window.api.usuarios.criar({ usuario, senha, is_admin, cargo });
   if (res?.erro) { toast(res.erro, 'error'); return; }
 
   fecharModal('modal-usuario');
@@ -115,7 +124,7 @@ async function salvarUsuario() {
 }
 
 function abrirTrocarSenha(id, nome) {
-  document.getElementById('troca-id').value    = id;
+  document.getElementById('troca-id').value     = id;
   document.getElementById('troca-senha').value  = '';
   document.getElementById('troca-senha2').value = '';
   document.getElementById('modal-senha-title').textContent = `Trocar senha — ${nome}`;
@@ -128,7 +137,7 @@ async function confirmarTrocarSenha() {
   const senha2 = document.getElementById('troca-senha2').value;
 
   if (senha.length < 6) { toast('Senha mínima: 6 caracteres', 'error'); return; }
-  if (senha !== senha2)  { toast('As senhas não conferem', 'error'); return; }
+  if (senha !== senha2)  { toast('As senhas não conferem', 'error');      return; }
 
   const res = await window.api.usuarios.trocarSenha(id, senha);
   if (res?.erro) { toast(res.erro, 'error'); return; }
