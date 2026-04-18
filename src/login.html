@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Login — Agenda</title>
+  <link rel="stylesheet" href="./css/style.css" />
+  <style>
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: var(--bg);
+    }
+    .login-box {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 40px 36px;
+      width: 100%;
+      max-width: 380px;
+      box-shadow: 0 8px 32px rgba(0,0,0,.08);
+    }
+    .login-box .brand {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+    .login-box .brand img {
+      height: 64px;
+      object-fit: contain;
+    }
+    .login-box h2 {
+      text-align: center;
+      font-size: 1.25rem;
+      margin-bottom: 24px;
+      color: var(--text);
+    }
+    .login-box .form-group {
+      margin-bottom: 16px;
+    }
+    .login-box label {
+      display: block;
+      font-size: .85rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    .login-box input {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 1rem;
+    }
+    .login-box input:focus {
+      outline: none;
+      border-color: var(--rosa);
+      box-shadow: 0 0 0 3px rgba(196,104,143,.18);
+    }
+    .login-box .btn-login {
+      width: 100%;
+      padding: 12px;
+      background: var(--rosa);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: background .2s;
+    }
+    .login-box .btn-login:hover { background: var(--rosa-dark); }
+    .erro-login {
+      color: #e53e3e;
+      font-size: .85rem;
+      text-align: center;
+      margin-top: 12px;
+      min-height: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-box">
+    <div class="brand">
+      <img src="./logo.png" alt="Agenda" onerror="this.style.display='none'" />
+    </div>
+    <h2>🔐 Entrar na Agenda</h2>
+
+    <div class="form-group">
+      <label for="l-usuario">Usuário</label>
+      <input type="text" id="l-usuario" placeholder="admin" autocomplete="username" />
+    </div>
+    <div class="form-group">
+      <label for="l-senha">Senha</label>
+      <input type="password" id="l-senha" placeholder="••••••••" autocomplete="current-password" />
+    </div>
+
+    <button class="btn-login" id="btn-entrar">Entrar</button>
+    <p class="erro-login" id="erro-login"></p>
+  </div>
+
+  <script>
+    async function fazerLogin() {
+      const usuario = document.getElementById('l-usuario').value.trim();
+      const senha   = document.getElementById('l-senha').value;
+      const erro    = document.getElementById('erro-login');
+      erro.textContent = '';
+
+      if (!usuario || !senha) {
+        erro.textContent = 'Preencha usuário e senha.';
+        return;
+      }
+
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ usuario, senha }),
+      });
+
+      if (res.ok) {
+        window.location.href = '/';
+      } else {
+        const data = await res.json();
+        erro.textContent = data.erro || 'Erro ao fazer login.';
+      }
+    }
+
+    document.getElementById('btn-entrar').addEventListener('click', fazerLogin);
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Enter') fazerLogin();
+    });
+  </script>
+</body>
+</html>
