@@ -6,6 +6,8 @@ let db;
 
 function getDb() {
   if (!db) {
+    // importa app aqui dentro, só quando getDb() for chamado
+    const { app } = require('electron');
     const dbPath = path.join(app.getPath('userData'), 'clinica.db');
     db = new Database(dbPath);
     db.pragma('journal_mode = WAL');
