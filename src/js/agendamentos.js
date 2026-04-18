@@ -26,7 +26,7 @@ async function renderAgendamentos() {
 
 function calcularStatus(a) {
   if (a.status === 'concluido' || a.status === 'cancelado') return a.status;
-  const agora = new Date();
+  const agora  = new Date();
   const dataAg = new Date(a.data_hora.replace(' ', 'T'));
   if (dataAg < agora) return 'atrasado';
   return a.status;
@@ -40,29 +40,30 @@ const STATUS_CONFIG = {
 };
 
 function renderLinhasAgend(lista) {
-  if (lista.length === 0) return `<tr><td colspan="6"><div class="empty-state"><div class="icon">📋</div><p>Nenhum agendamento encontrado.</p></div></td></tr>`;
+  if (lista.length === 0)
+    return `<tr><td colspan="6"><div class="empty-state"><div class="icon">📋</div><p>Nenhum agendamento encontrado.</p></div></td></tr>`;
   return lista.map(a => {
     const statusReal = calcularStatus(a);
     const cfg = STATUS_CONFIG[statusReal];
+    const nomeProcedimento = a.variante_nome
+      ? `${a.procedimento_nome} — ${a.variante_nome}`
+      : a.procedimento_nome;
     const opcoesHtml = Object.entries(STATUS_CONFIG).map(([val, c]) => `
-      <div class="status-dropdown-item" onclick="alterarStatusAgend(${a.id}, '${val}'); fecharTodosDropdowns()">
+      <div class="status-dropdown-item" onclick="alterarStatusAgend(${a.id},'${val}');fecharTodosDropdowns()">
         <span class="status-dot dot-${val}"></span> ${c.emoji} ${c.label}
       </div>`).join('');
-
     return `
     <tr>
       <td>${fmtDataHora(a.data_hora)}</td>
       <td><strong>${a.cliente_nome}</strong></td>
-      <td>${a.procedimento_nome}</td>
+      <td>${nomeProcedimento}</td>
       <td>${fmtMoeda(a.valor_cobrado)}</td>
       <td>
         <div class="status-wrapper">
           <div class="status-pill status-pill-${statusReal}" onclick="toggleStatusDropdown(this)">
             ${cfg.emoji} ${cfg.label}
           </div>
-          <div class="status-dropdown">
-            ${opcoesHtml}
-          </div>
+          <div class="status-dropdown">${opcoesHtml}</div>
         </div>
       </td>
       <td>
@@ -90,12 +91,11 @@ function fecharTodosDropdowns() {
 async function alterarStatusAgend(id, status) {
   await window.api.agendamentos.status({ id, status });
   toast(`Status atualizado para "${status}".`, 'success');
-  // Atualiza só o select sem re-renderizar a tabela toda
-  const lista = await window.api.agendamentos.listar({});
   const filtroData = document.getElementById('filtro-data')?.value;
   if (filtroData) {
     filtrarAgendPorData();
   } else {
+    const lista = await window.api.agendamentos.listar({});
     document.getElementById('tbody-agend').innerHTML = renderLinhasAgend(lista);
   }
 }
@@ -112,26 +112,73 @@ async function limparFiltroAgend() {
   document.getElementById('tbody-agend').innerHTML = renderLinhasAgend(lista);
 }
 
+// ── modal agendamento ─────────────────────────────────────────
+async function _carregarVariantesAgend(procId, varianteSelecionada) {
+  const wrap = document.getElementById('agend-variante-wrap');
+  const sel  = document.getElementById('agend-variante');
+  if (!procId) { wrap.classList.add('hidden'); return; }
+
+  const procs = await window.api.procedimentos.todos();
+  const proc  = procs.find(p => p.id === parseInt(procId));
+  if (!proc?.tem_variantes) { wrap.classList.add('hidden'); return; }
+
+  const variantes = await window.api.variantes.listar(procId);
+  if (variantes.length === 0) { wrap.classList.add('hidden'); return; }
+
+  sel.innerHTML = variantes.map(v =>
+    `<option value="${v.id}" data-valor="${v.valor}" data-duracao="${v.duracao_min}"
+      ${v.id === varianteSelecionada ? 'selected' : ''}>
+      ${v.nome} — ${v.duracao_min}min · ${fmtMoeda(v.valor)}
+    </option>`
+  ).join('');
+  wrap.classList.remove('hidden');
+  _preencherValorVariante();
+}
+
+function _preencherValorVariante() {
+  const wrap = document.getElementById('agend-variante-wrap');
+  if (!wrap.classList.contains('hidden')) {
+    const sel = document.getElementById('agend-variante');
+    const opt = sel.options[sel.selectedIndex];
+    if (opt && !document.getElementById('agend-id').value) {
+      document.getElementById('agend-valor').value = opt.dataset.valor || '';
+    }
+  }
+}
+
+function preencherValor() {
+  const wrap = document.getElementById('agend-variante-wrap');
+  if (!wrap?.classList.contains('hidden')) return; // valor vem da variante
+  const sel = document.getElementById('agend-procedimento');
+  const opt = sel.options[sel.selectedIndex];
+  if (opt && !document.getElementById('agend-id').value)
+    document.getElementById('agend-valor').value = opt.dataset.valor || '';
+}
+
 async function abrirNovoAgendamento(dataHoraPre) {
-  const clientes      = await window.api.clientes.listar();
-  const procedimentos = await window.api.procedimentos.listar();
+  const clientes = await window.api.clientes.listar();
+  const procs    = await window.api.procedimentos.listar();
 
   if (clientes.length === 0) { toast('Cadastre um cliente primeiro.', 'error'); return; }
-  if (procedimentos.length === 0) { toast('Cadastre um procedimento primeiro.', 'error'); return; }
+  if (procs.length === 0)    { toast('Cadastre um procedimento primeiro.', 'error'); return; }
 
   document.getElementById('modal-agend-title').textContent = 'Novo Agendamento';
-  document.getElementById('agend-id').value     = '';
-  document.getElementById('agend-status').value = 'agendado';
-  document.getElementById('agend-obs').value    = '';
-  document.getElementById('agend-valor').value  = '';
+  document.getElementById('agend-id').value        = '';
+  document.getElementById('agend-status').value    = 'agendado';
+  document.getElementById('agend-obs').value       = '';
+  document.getElementById('agend-valor').value     = '';
   document.getElementById('agend-data-hora').value = dataHoraPre || '';
 
   document.getElementById('agend-cliente').innerHTML =
     clientes.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
   document.getElementById('agend-procedimento').innerHTML =
-    procedimentos.map(p => `<option value="${p.id}" data-valor="${p.valor}">${p.nome} (${p.duracao_min}min)</option>`).join('');
+    procs.map(p => `<option value="${p.id}" data-valor="${p.valor}" data-tem-variantes="${p.tem_variantes}">${p.nome}</option>`).join('');
 
-  preencherValor();
+  const primeiroProcId = procs[0]?.id;
+  await _carregarVariantesAgend(primeiroProcId, null);
+  if (document.getElementById('agend-variante-wrap').classList.contains('hidden'))
+    preencherValor();
+
   abrirModal('modal-agendamento');
 }
 
@@ -139,8 +186,8 @@ async function editarAgendamento(id) {
   const a = await window.api.agendamentos.buscar(id);
   if (!a) return;
 
-  const clientes      = await window.api.clientes.listar();
-  const procedimentos = await window.api.procedimentos.listar();
+  const clientes = await window.api.clientes.listar();
+  const procs    = await window.api.procedimentos.listar();
 
   document.getElementById('modal-agend-title').textContent = 'Editar Agendamento';
   document.getElementById('agend-id').value = a.id;
@@ -148,36 +195,33 @@ async function editarAgendamento(id) {
   document.getElementById('agend-cliente').innerHTML =
     clientes.map(c => `<option value="${c.id}" ${c.id===a.cliente_id?'selected':''}>${c.nome}</option>`).join('');
   document.getElementById('agend-procedimento').innerHTML =
-    procedimentos.map(p => `<option value="${p.id}" data-valor="${p.valor}" ${p.id===a.procedimento_id?'selected':''}>${p.nome} (${p.duracao_min}min)</option>`).join('');
+    procs.map(p => `<option value="${p.id}" data-valor="${p.valor}" data-tem-variantes="${p.tem_variantes}" ${p.id===a.procedimento_id?'selected':''}>${p.nome}</option>`).join('');
 
   document.getElementById('agend-data-hora').value = toInputDatetime(a.data_hora);
   document.getElementById('agend-valor').value     = a.valor_cobrado || '';
   document.getElementById('agend-status').value    = a.status;
   document.getElementById('agend-obs').value       = a.observacoes || '';
 
+  await _carregarVariantesAgend(a.procedimento_id, a.variante_id);
   abrirModal('modal-agendamento');
 }
 
-function preencherValor() {
-  const sel   = document.getElementById('agend-procedimento');
-  const opt   = sel.options[sel.selectedIndex];
-  const valor = opt ? opt.dataset.valor : '';
-  if (!document.getElementById('agend-id').value) {
-    document.getElementById('agend-valor').value = valor || '';
-  }
-}
-
 async function salvarAgendamento() {
-  const clienteId  = document.getElementById('agend-cliente').value;
-  const procId     = document.getElementById('agend-procedimento').value;
-  const dataHora   = document.getElementById('agend-data-hora').value;
-
+  const clienteId = document.getElementById('agend-cliente').value;
+  const procId    = document.getElementById('agend-procedimento').value;
+  const dataHora  = document.getElementById('agend-data-hora').value;
   if (!clienteId || !procId || !dataHora) { toast('Preencha os campos obrigatórios.', 'error'); return; }
+
+  const wrapVar   = document.getElementById('agend-variante-wrap');
+  const varianteId = !wrapVar.classList.contains('hidden')
+    ? parseInt(document.getElementById('agend-variante').value) || null
+    : null;
 
   await window.api.agendamentos.salvar({
     id:              document.getElementById('agend-id').value || null,
     cliente_id:      parseInt(clienteId),
     procedimento_id: parseInt(procId),
+    variante_id:     varianteId,
     data_hora:       toDbDatetime(dataHora),
     status:          document.getElementById('agend-status').value,
     valor_cobrado:   parseFloat(document.getElementById('agend-valor').value) || 0,
@@ -186,7 +230,6 @@ async function salvarAgendamento() {
 
   fecharModal('modal-agendamento');
   toast('Agendamento salvo!', 'success');
-
   const paginaAtiva = document.querySelector('.page:not(.hidden)');
   if (paginaAtiva?.id === 'page-agendamentos') renderAgendamentos();
   if (paginaAtiva?.id === 'page-calendario')   renderCalendario();
