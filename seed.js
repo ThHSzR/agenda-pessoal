@@ -1,217 +1,266 @@
-/**
- * seed.js — Injeta clientes de exemplo no banco SQLite da clínica
- * Execute com: node seed.js
- */
-const Database = require('better-sqlite3');
-const path = require('path');
-const os   = require('os');
+const bcrypt    = require('bcryptjs');
+const { getDb } = require('./server/database');
 
-// Caminho padrão do userData no Electron (Linux/Windows/Mac)
-const platform = process.platform;
-let userData;
-if (platform === 'win32') {
-  userData = path.join(process.env.APPDATA, 'clinica-estetica');
-} else if (platform === 'darwin') {
-  userData = path.join(os.homedir(), 'Library', 'Application Support', 'clinica-estetica');
-} else {
-  userData = path.join(os.homedir(), '.config', 'clinica-estetica');
+const db = getDb();
+db.pragma('foreign_keys = ON');
+
+// ─────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────
+const pick  = arr => arr[Math.floor(Math.random() * arr.length)];
+const bool  = ()  => Math.random() > 0.5 ? 1 : 0;
+const num   = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+
+function dataAleatoria(diasAtras = 180, diasFrente = 60) {
+  const ms  = Date.now();
+  const min = ms - diasAtras * 86400000;
+  const max = ms + diasFrente * 86400000;
+  const d   = new Date(min + Math.random() * (max - min));
+  return d.toISOString().slice(0, 16).replace('T', ' ');
 }
 
-const dbPath = path.join(userData, 'clinica.db');
-console.log('📂 Banco:', dbPath);
+function nascimento() {
+  const ano = num(1970, 2003);
+  const mes = String(num(1, 12)).padStart(2, '0');
+  const dia = String(num(1, 28)).padStart(2, '0');
+  return `${ano}-${mes}-${dia}`;
+}
 
-const db = new Database(dbPath);
+function cpf() {
+  return Array.from({length: 3}, () => String(num(100,999))).join('.') + '-' + String(num(10,99));
+}
 
-const clientes = [
-  {
-    nome: 'Ana Carolina Ferreira',
-    data_nascimento: '1995-03-14',
-    cpf: '123.456.789-00',
-    email: 'ana.carolina@gmail.com',
-    telefone: '(62) 3201-1234',
-    celular: '(62) 99801-2345',
-    endereco: 'Rua das Flores, 142 - Setor Bueno',
-    cidade: 'Goiânia',
-    uf: 'GO',
-    areas_tratar: 'Virilha, axilas, pernas completas',
-    metodo_dep_cera: 1, metodo_dep_lamina: 0, metodo_dep_laser: 0,
-    prob_encravamento: 1, prob_manchas: 1, prob_outros: null,
-    medicamento_uso: 0, medicamento_qual: null,
-    roacutan: 0, tto_vitiligo: 0,
-    alergia_medicamento: 0, alergia_qual: null,
-    tratamento_dermato: 1, tratamento_dermato_qual: 'Peeling de ácido glicólico',
-    usa_acidos: 1,
-    cirurgia: 0, cirurgia_qual: null,
-    anticoncepcional: 1, anticoncepcional_qual: 'Yasmin',
-    historico_oncologico: 0, oncologico_qual: null,
-    acompanhamento_medico: 0, acompanhamento_qual: null,
-    epilepsia: 0,
-    alteracao_hormonal: 0, hormonal_qual: null,
-    hirsutismo: 0, gestante: 0, herpes: 0, lactante: 0,
-    cor_olhos: 'Castanhos', cor_cabelos: 'Castanhos escuros', cor_pelos: 'Negros',
-    tomou_sol: 1, sol_quando: 'Há 15 dias',
-    fitzpatrick: 3,
-    termo_assinado: 1,
-    observacoes: 'Cliente assídua, prefere sessões às terças de manhã'
-  },
-  {
-    nome: 'Beatriz Souza Lima',
-    data_nascimento: '1990-07-22',
-    cpf: '234.567.890-11',
-    email: 'beatriz.lima@hotmail.com',
-    telefone: null,
-    celular: '(62) 98723-4567',
-    endereco: 'Av. T-3, 890 - Setor Marista',
-    cidade: 'Goiânia',
-    uf: 'GO',
-    areas_tratar: 'Buço, sobrancelha, rosto completo',
-    metodo_dep_cera: 1, metodo_dep_lamina: 1, metodo_dep_laser: 0,
-    prob_encravamento: 0, prob_manchas: 1, prob_outros: 'Sensibilidade na pele',
-    medicamento_uso: 1, medicamento_qual: 'Levotiroxina 50mcg',
-    roacutan: 0, tto_vitiligo: 0,
-    alergia_medicamento: 1, alergia_qual: 'Dipirona',
-    tratamento_dermato: 0, tratamento_dermato_qual: null,
-    usa_acidos: 0,
-    cirurgia: 1, cirurgia_qual: 'Rinoplastia (2019)',
-    anticoncepcional: 0, anticoncepcional_qual: null,
-    historico_oncologico: 0, oncologico_qual: null,
-    acompanhamento_medico: 1, acompanhamento_qual: 'Endocrinologista — hipotireoidismo',
-    epilepsia: 0,
-    alteracao_hormonal: 1, hormonal_qual: 'Hipotireoidismo',
-    hirsutismo: 1, gestante: 0, herpes: 0, lactante: 0,
-    cor_olhos: 'Verdes', cor_cabelos: 'Loiros tingidos', cor_pelos: 'Castanhos',
-    tomou_sol: 0, sol_quando: null,
-    fitzpatrick: 2,
-    termo_assinado: 1,
-    observacoes: 'Pele sensível, usar configuração mais baixa no laser'
-  },
-  {
-    nome: 'Camila Rocha Mendes',
-    data_nascimento: '2001-11-05',
-    cpf: '345.678.901-22',
-    email: 'camila.mendes@gmail.com',
-    telefone: null,
-    celular: '(62) 99934-5678',
-    endereco: 'Rua 88, 340 - Setor Sul',
-    cidade: 'Goiânia',
-    uf: 'GO',
-    areas_tratar: 'Braços, pernas, virilha',
-    metodo_dep_cera: 0, metodo_dep_lamina: 1, metodo_dep_laser: 0,
-    prob_encravamento: 1, prob_manchas: 0, prob_outros: null,
-    medicamento_uso: 0, medicamento_qual: null,
-    roacutan: 0, tto_vitiligo: 0,
-    alergia_medicamento: 0, alergia_qual: null,
-    tratamento_dermato: 0, tratamento_dermato_qual: null,
-    usa_acidos: 0,
-    cirurgia: 0, cirurgia_qual: null,
-    anticoncepcional: 1, anticoncepcional_qual: 'NuvaRing',
-    historico_oncologico: 0, oncologico_qual: null,
-    acompanhamento_medico: 0, acompanhamento_qual: null,
-    epilepsia: 0,
-    alteracao_hormonal: 0, hormonal_qual: null,
-    hirsutismo: 0, gestante: 0, herpes: 0, lactante: 0,
-    cor_olhos: 'Castanhos', cor_cabelos: 'Pretos', cor_pelos: 'Negros',
-    tomou_sol: 1, sol_quando: 'Ontem (praia)',
-    fitzpatrick: 4,
-    termo_assinado: 1,
-    observacoes: 'Primeira vez com laser. Conversar sobre expectativas.'
-  },
-  {
-    nome: 'Daniela Alves Cardoso',
-    data_nascimento: '1985-01-30',
-    cpf: '456.789.012-33',
-    email: 'daniela.cardoso@yahoo.com.br',
-    telefone: '(62) 3301-9876',
-    celular: '(62) 99145-6789',
-    endereco: 'Rua C-149, 55 - Jardim América',
-    cidade: 'Goiânia',
-    uf: 'GO',
-    areas_tratar: 'Axilas, bikini completo',
-    metodo_dep_cera: 0, metodo_dep_lamina: 0, metodo_dep_laser: 1,
-    prob_encravamento: 0, prob_manchas: 0, prob_outros: null,
-    medicamento_uso: 1, medicamento_qual: 'Omeprazol 20mg',
-    roacutan: 0, tto_vitiligo: 0,
-    alergia_medicamento: 0, alergia_qual: null,
-    tratamento_dermato: 1, tratamento_dermato_qual: 'Botox preventivo',
-    usa_acidos: 1,
-    cirurgia: 1, cirurgia_qual: 'Lipoaspiração abdominal (2022)',
-    anticoncepcional: 0, anticoncepcional_qual: null,
-    historico_oncologico: 0, oncologico_qual: null,
-    acompanhamento_medico: 0, acompanhamento_qual: null,
-    epilepsia: 0,
-    alteracao_hormonal: 0, hormonal_qual: null,
-    hirsutismo: 0, gestante: 0, herpes: 1, lactante: 0,
-    cor_olhos: 'Azuis', cor_cabelos: 'Loiros naturais', cor_pelos: 'Castanhos claros',
-    tomou_sol: 0, sol_quando: null,
-    fitzpatrick: 1,
-    termo_assinado: 1,
-    observacoes: 'Histórico de herpes — verificar protocolo antes de sessão'
-  },
-  {
-    nome: 'Fernanda Costa Ribeiro',
-    data_nascimento: '1998-05-18',
-    cpf: '567.890.123-44',
-    email: 'fernanda.ribeiro@gmail.com',
-    telefone: null,
-    celular: '(62) 99267-8901',
-    endereco: 'Rua 10, 120 - Setor Oeste',
-    cidade: 'Goiânia',
-    uf: 'GO',
-    areas_tratar: 'Pernas completas, virilha, abdômen',
-    metodo_dep_cera: 1, metodo_dep_lamina: 1, metodo_dep_laser: 0,
-    prob_encravamento: 1, prob_manchas: 1, prob_outros: 'Foliculite recorrente',
-    medicamento_uso: 0, medicamento_qual: null,
-    roacutan: 0, tto_vitiligo: 0,
-    alergia_medicamento: 0, alergia_qual: null,
-    tratamento_dermato: 0, tratamento_dermato_qual: null,
-    usa_acidos: 0,
-    cirurgia: 0, cirurgia_qual: null,
-    anticoncepcional: 1, anticoncepcional_qual: 'DIU hormonal (Mirena)',
-    historico_oncologico: 0, oncologico_qual: null,
-    acompanhamento_medico: 0, acompanhamento_qual: null,
-    epilepsia: 0,
-    alteracao_hormonal: 0, hormonal_qual: null,
-    hirsutismo: 0, gestante: 0, herpes: 0, lactante: 0,
-    cor_olhos: 'Castanhos escuros', cor_cabelos: 'Pretos com mechas', cor_pelos: 'Negros',
-    tomou_sol: 0, sol_quando: null,
-    fitzpatrick: 5,
-    termo_assinado: 1,
-    observacoes: 'Pele escura tipo V — atenção ao protocolo de energia do equipamento'
-  }
+function tel() {
+  return `(${num(11,99)}) 9${num(1000,9999)}-${num(1000,9999)}`;
+}
+
+// ─────────────────────────────────────────────
+// DADOS FICTÍCIOS
+// ─────────────────────────────────────────────
+const NOMES = [
+  'Ana Paula Ferreira','Beatriz Souza Lima','Camila Rodrigues','Daniela Costa',
+  'Eduarda Martins','Fernanda Oliveira','Gabriela Santos','Helena Almeida',
+  'Isabela Carvalho','Juliana Pereira','Karla Nascimento','Larissa Mendes',
+  'Mariana Silva','Natalia Rocha','Olivia Campos','Patricia Gomes',
+  'Rafaela Torres','Sabrina Lopes','Tatiane Ribeiro','Vanessa Moreira',
+  'Amanda Freitas','Bianca Nunes','Carolina Pinto','Débora Cavalcante',
+  'Elaine Cardoso','Flávia Correia','Giovana Dias','Heloísa Barros',
+  'Iris Monteiro','Jessica Cunha',
 ];
 
-const fields = [
-  'nome','data_nascimento','cpf','email','telefone','celular','endereco','cidade','uf',
-  'areas_tratar','metodo_dep_cera','metodo_dep_lamina','metodo_dep_laser',
-  'prob_encravamento','prob_manchas','prob_outros',
-  'medicamento_uso','medicamento_qual','roacutan','tto_vitiligo',
-  'alergia_medicamento','alergia_qual',
-  'tratamento_dermato','tratamento_dermato_qual','usa_acidos',
-  'cirurgia','cirurgia_qual',
-  'anticoncepcional','anticoncepcional_qual',
-  'historico_oncologico','oncologico_qual',
-  'acompanhamento_medico','acompanhamento_qual',
-  'epilepsia','alteracao_hormonal','hormonal_qual','hirsutismo',
-  'gestante','herpes','lactante',
-  'cor_olhos','cor_cabelos','cor_pelos',
-  'tomou_sol','sol_quando','fitzpatrick',
-  'termo_assinado','observacoes'
+const CIDADES = [
+  ['Goiânia','GO'],['São Paulo','SP'],['Rio de Janeiro','RJ'],
+  ['Belo Horizonte','MG'],['Brasília','DF'],['Salvador','BA'],
+  ['Anápolis','GO'],['Aparecida de Goiânia','GO'],['Curitiba','PR'],
+  ['Fortaleza','CE'],
 ];
 
-const cols = fields.join(',');
-const phs  = fields.map(() => '?').join(',');
-const stmt = db.prepare(`INSERT INTO clientes (${cols}) VALUES (${phs})`);
+const ENDERECOS = [
+  'Rua das Flores, 123','Av. Brasil, 456','Rua XV de Novembro, 789',
+  'Alameda Santos, 321','Rua Goiás, 654','Av. Paulista, 1000',
+  'Rua das Acácias, 22','Travessa do Sol, 88','Rua Minas Gerais, 10',
+  'Av. Anhanguera, 500',
+];
 
-let inseridos = 0;
-for (const c of clientes) {
-  try {
-    stmt.run(...fields.map(f => c[f] !== undefined ? c[f] : null));
-    console.log(`✅ ${c.nome}`);
-    inseridos++;
-  } catch(e) {
-    console.error(`❌ ${c.nome}:`, e.message);
+const COR_OLHOS   = ['castanhos','verdes','azuis','pretos','avelã'];
+const COR_CABELOS = ['pretos','castanhos','loiros','ruivos','grisalhos','tingidos'];
+const COR_PELOS   = ['finos e claros','grossos e escuros','médios e castanhos','finos e escuros'];
+
+// ─────────────────────────────────────────────
+// 1. USUÁRIOS
+// ─────────────────────────────────────────────
+console.log('→ Inserindo usuários...');
+
+const usuariosExtra = [
+  { usuario: 'gerente1',  senha: 'gerente123', is_admin: 0, cargo: 'gerente'  },
+  { usuario: 'operador1', senha: 'oper123',    is_admin: 0, cargo: 'operador' },
+  { usuario: 'operador2', senha: 'oper456',    is_admin: 0, cargo: 'operador' },
+];
+
+const insUsuario = db.prepare(
+  'INSERT OR IGNORE INTO usuarios (usuario, senha, is_admin, cargo) VALUES (?,?,?,?)'
+);
+for (const u of usuariosExtra) {
+  insUsuario.run(u.usuario, bcrypt.hashSync(u.senha, 10), u.is_admin, u.cargo);
+}
+
+// ─────────────────────────────────────────────
+// 2. PROCEDIMENTOS + VARIANTES
+// ─────────────────────────────────────────────
+console.log('→ Inserindo procedimentos...');
+
+const procedimentos = [
+  {
+    nome: 'Limpeza de Pele', descricao: 'Limpeza profunda com extração de comedões.',
+    duracao_min: 60, valor: 120.00, is_laser: 0, tem_variantes: 0,
+  },
+  {
+    nome: 'Design de Sobrancelha', descricao: 'Modelagem com linha e pinça.',
+    duracao_min: 30, valor: 45.00, is_laser: 0, tem_variantes: 0,
+  },
+  {
+    nome: 'Depilação a Laser', descricao: 'Laser de diodo para remoção de pelos.',
+    duracao_min: 45, valor: 0, is_laser: 1, tem_variantes: 1,
+    variantes: [
+      { nome: 'Buço',             descricao: 'Região acima dos lábios', duracao_min: 15, valor: 80.00  },
+      { nome: 'Axilas',           descricao: 'Região das axilas',       duracao_min: 20, valor: 120.00 },
+      { nome: 'Pernas completas', descricao: 'Toda a perna',            duracao_min: 60, valor: 350.00 },
+      { nome: 'Virilha',          descricao: 'Região inguinal',         duracao_min: 30, valor: 180.00 },
+      { nome: 'Costas',           descricao: 'Região dorsal completa',  duracao_min: 45, valor: 280.00 },
+    ],
+  },
+  {
+    nome: 'Hidratação Facial', descricao: 'Máscara hidratante com vitamina C.',
+    duracao_min: 45, valor: 90.00, is_laser: 0, tem_variantes: 0,
+  },
+  {
+    nome: 'Peeling Químico', descricao: 'Renovação celular com ácidos.',
+    duracao_min: 50, valor: 0, is_laser: 0, tem_variantes: 1,
+    variantes: [
+      { nome: 'Peeling Superficial', descricao: 'Ácido glicólico 30%',   duracao_min: 30, valor: 150.00 },
+      { nome: 'Peeling Médio',       descricao: 'Ácido tricloroacético',  duracao_min: 50, valor: 250.00 },
+    ],
+  },
+  {
+    nome: 'Massagem Relaxante', descricao: 'Massagem corporal 60 minutos.',
+    duracao_min: 60, valor: 110.00, is_laser: 0, tem_variantes: 0,
+  },
+  {
+    nome: 'Micropigmentação', descricao: 'Pigmentação semipermanente.',
+    duracao_min: 120, valor: 0, is_laser: 0, tem_variantes: 1,
+    variantes: [
+      { nome: 'Sobrancelha', descricao: 'Técnica fio a fio',    duracao_min: 120, valor: 400.00 },
+      { nome: 'Lábios',      descricao: 'Contorno e preench.',  duracao_min: 90,  valor: 350.00 },
+    ],
+  },
+];
+
+const insProc = db.prepare(
+  'INSERT OR IGNORE INTO procedimentos (nome,descricao,duracao_min,valor,is_laser,tem_variantes) VALUES (?,?,?,?,?,?)'
+);
+const insVar = db.prepare(
+  'INSERT INTO procedimento_variantes (procedimento_id,nome,descricao,duracao_min,valor) VALUES (?,?,?,?,?)'
+);
+
+const procIds = {};
+for (const p of procedimentos) {
+  const existe = db.prepare('SELECT id FROM procedimentos WHERE nome=?').get(p.nome);
+  if (existe) { procIds[p.nome] = existe.id; continue; }
+
+  const r = insProc.run(p.nome, p.descricao, p.duracao_min, p.valor, p.is_laser, p.tem_variantes);
+  procIds[p.nome] = r.lastInsertRowid;
+  if (p.variantes) {
+    for (const v of p.variantes) {
+      insVar.run(r.lastInsertRowid, v.nome, v.descricao, v.duracao_min, v.valor);
+    }
   }
 }
 
-console.log(`\n🎉 ${inseridos}/${clientes.length} clientes inseridos com sucesso!`);
-db.close();
+const todasVariantes = db.prepare('SELECT id, procedimento_id FROM procedimento_variantes').all();
+
+// ─────────────────────────────────────────────
+// 3. CLIENTES
+// ─────────────────────────────────────────────
+console.log('→ Inserindo clientes...');
+
+const insCliente = db.prepare(`
+  INSERT OR IGNORE INTO clientes
+  (nome,data_nascimento,cpf,email,telefone,celular,endereco,cidade,uf,
+   cor_olhos,cor_cabelos,cor_pelos,fitzpatrick,
+   medicamento_uso,alergia_medicamento,alergia_qual,
+   anticoncepcional,anticoncepcional_qual,
+   tomou_sol,sol_quando,observacoes)
+  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+`);
+
+for (const nome of NOMES) {
+  const [cidade, uf] = pick(CIDADES);
+  const usaMed  = bool();
+  const temAler = bool();
+  const usaAnti = bool();
+  insCliente.run(
+    nome, nascimento(), cpf(),
+    nome.split(' ')[0].toLowerCase() + '@email.com',
+    tel(), tel(),
+    pick(ENDERECOS), cidade, uf,
+    pick(COR_OLHOS), pick(COR_CABELOS), pick(COR_PELOS),
+    num(1, 6),
+    usaMed, temAler,
+    temAler ? pick(['Dipirona','Penicilina','Anti-inflamatório']) : null,
+    usaAnti, usaAnti ? pick(['Anticoncepcional oral','DIU','Implante']) : null,
+    bool(), bool() ? 'Há 2 semanas' : null,
+    pick([null, 'Pele sensível', 'Faz uso de ácidos em casa', 'Retornou após gravidez'])
+  );
+}
+
+const todosClientes = db.prepare('SELECT id FROM clientes').all().map(c => c.id);
+
+// ─────────────────────────────────────────────
+// 4. INTERESSES (cliente ↔ procedimento)
+// ─────────────────────────────────────────────
+console.log('→ Inserindo interesses...');
+
+const insCliProc = db.prepare(
+  'INSERT OR IGNORE INTO cliente_procedimentos_interesse (cliente_id, procedimento_id) VALUES (?,?)'
+);
+const insCliVar = db.prepare(
+  'INSERT OR IGNORE INTO cliente_variantes_interesse (cliente_id, variante_id) VALUES (?,?)'
+);
+
+const todosProcIds = Object.values(procIds);
+for (const cid of todosClientes) {
+  const qtd = num(1, 3);
+  const selecionados = [...todosProcIds].sort(() => Math.random() - 0.5).slice(0, qtd);
+  for (const pid of selecionados) {
+    insCliProc.run(cid, pid);
+    const vars = todasVariantes.filter(v => v.procedimento_id === pid);
+    if (vars.length > 0) insCliVar.run(cid, pick(vars).id);
+  }
+}
+
+// ─────────────────────────────────────────────
+// 5. AGENDAMENTOS
+// ─────────────────────────────────────────────
+console.log('→ Inserindo agendamentos...');
+
+const STATUS   = ['agendado','agendado','agendado','concluido','concluido','cancelado'];
+const insAgend = db.prepare(`
+  INSERT INTO agendamentos
+  (cliente_id, procedimento_id, variante_id, data_hora, status, valor_cobrado, observacoes)
+  VALUES (?,?,?,?,?,?,?)
+`);
+
+for (let i = 0; i < 60; i++) {
+  const cid  = pick(todosClientes);
+  const proc = pick(procedimentos);
+  const pid  = procIds[proc.nome];
+  if (!pid) continue;
+
+  let vid   = null;
+  let valor = proc.valor;
+
+  if (proc.tem_variantes) {
+    const vars = todasVariantes.filter(v => v.procedimento_id === pid);
+    if (vars.length > 0) {
+      const v    = pick(vars);
+      vid        = v.id;
+      const vRow = db.prepare('SELECT valor FROM procedimento_variantes WHERE id=?').get(v.id);
+      valor      = vRow?.valor ?? 0;
+    }
+  }
+
+  insAgend.run(
+    cid, pid, vid,
+    dataAleatoria(180, 60),
+    pick(STATUS),
+    valor > 0 ? valor : num(80, 400),
+    pick([null, null, null, 'Cliente indicada por amiga', 'Retorno', 'Pacote 5 sessões'])
+  );
+}
+
+console.log('');
+console.log('✅ Seed concluído!');
+console.log('   Usuários: gerente1 / gerente123 | operador1 / oper123 | operador2 / oper456');
+console.log(`   Clientes: ${NOMES.length}`);
+console.log(`   Procedimentos: ${procedimentos.length}`);
+console.log('   Agendamentos: 60');
