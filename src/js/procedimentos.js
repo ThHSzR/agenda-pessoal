@@ -19,7 +19,6 @@ async function renderProcedimentos() {
               <tr>
                 <td>
                   <strong>${p.nome}</strong>
-                  ${p.is_laser ? ' <span class="badge badge-agendado">Laser</span>' : ''}
                   ${p.descricao ? `<br><small style="color:var(--text-muted)">${p.descricao}</small>` : ''}
                 </td>
                 <td>${p.tem_variantes ? '<em style="color:var(--text-muted)">Ver variantes</em>' : p.duracao_min + ' min'}</td>
@@ -84,7 +83,6 @@ function _adicionarOuEditarVariante() {
     valor:       parseFloat(document.getElementById('var-valor').value) || 0,
     ativo: 1,
   };
-  // preserva id se for variante já salva no banco
   if (idx !== '' && _variantesTemp[parseInt(idx)]?.id)
     v.id = _variantesTemp[parseInt(idx)].id;
 
@@ -93,7 +91,6 @@ function _adicionarOuEditarVariante() {
   } else {
     _variantesTemp.push(v);
   }
-  // limpa form variante
   ['var-idx','var-nome','var-desc','var-dur','var-valor'].forEach(id => {
     const e = document.getElementById(id); if (e) e.value = id === 'var-dur' ? '30' : '';
   });
@@ -114,7 +111,6 @@ function abrirNovoProcedimento() {
   document.getElementById('proc-valor').value   = '';
   document.getElementById('proc-desc').value    = '';
   document.getElementById('proc-tem-variantes').checked = false;
-  document.getElementById('proc-is-laser').checked      = false;
   _variantesTemp = [];
   _toggleVariantes();
   _renderVariantesTemp();
@@ -133,7 +129,6 @@ async function editarProcedimento(id) {
   document.getElementById('proc-valor').value   = p.valor;
   document.getElementById('proc-desc').value    = p.descricao || '';
   document.getElementById('proc-tem-variantes').checked = !!p.tem_variantes;
-  document.getElementById('proc-is-laser').checked      = !!p.is_laser;
 
   _variantesTemp = p.tem_variantes
     ? await window.api.variantes.listar(p.id)
@@ -149,7 +144,6 @@ async function salvarProcedimento() {
   if (!nome) { toast('Nome é obrigatório', 'error'); return; }
 
   const temVariantes = document.getElementById('proc-tem-variantes').checked;
-  const isLaser      = document.getElementById('proc-is-laser').checked;
 
   if (temVariantes && _variantesTemp.length === 0) {
     toast('Adicione ao menos uma variante.', 'error'); return;
@@ -162,20 +156,16 @@ async function salvarProcedimento() {
     duracao_min:  parseInt(document.getElementById('proc-duracao').value) || 60,
     valor:        parseFloat(document.getElementById('proc-valor').value) || 0,
     ativo:        1,
-    is_laser:     isLaser ? 1 : 0,
     tem_variantes: temVariantes ? 1 : 0,
   });
 
-  // salva variantes
   if (temVariantes) {
-    // remove variantes antigas que não estão mais na lista temp
     const variantesAtuais = await window.api.variantes.listar(procId);
     const idsNovos = _variantesTemp.filter(v => v.id).map(v => v.id);
     for (const va of variantesAtuais) {
       if (!idsNovos.includes(va.id))
         await window.api.variantes.excluir(va.id);
     }
-    // salva/atualiza cada variante
     for (const v of _variantesTemp) {
       await window.api.variantes.salvar({ ...v, procedimento_id: procId });
     }

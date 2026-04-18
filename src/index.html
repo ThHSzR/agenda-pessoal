@@ -51,11 +51,6 @@
           </div>
           <div class="form-group">
             <label>Procedimento *</label>
-            <select id="agend-procedimento" onchange="preencherValor()"></select>
-          </div>
-          <!-- dentro do modal-agendamento, após o select agend-procedimento -->
-          <div class="form-group">
-            <label>Procedimento *</label>
             <select id="agend-procedimento"
               onchange="_carregarVariantesAgend(this.value, null).then(() => preencherValor())">
             </select>
@@ -97,7 +92,6 @@
   </div>
 
   <!-- ═══ MODAL CLIENTE (Ficha de Anamnese) ═══ -->
-  <!-- ═══ MODAL CLIENTE (Ficha de Anamnese) ═══ -->
   <div id="modal-cliente" class="modal-overlay hidden">
     <div class="modal modal-lg">
       <div class="modal-header">
@@ -114,7 +108,7 @@
           <button class="tab-btn" onclick="switchTab('tab-fisico',this)">🧬 Físico / Pele</button>
         </div>
 
-        <!-- ABA 1 — DADOS PESSOAIS (sem alteração) -->
+        <!-- ABA 1 — DADOS PESSOAIS -->
         <div id="tab-dados" class="tab-content" style="min-height:420px">
           <div class="form-row">
             <div class="form-group" style="grid-column:1/-1">
@@ -170,32 +164,9 @@
           <div id="cli-proc-interesse-list" class="check-group" style="flex-wrap:wrap;gap:10px">
             <!-- preenchido via JS -->
           </div>
-
-          <div id="cli-laser-section" class="hidden" style="margin-top:24px">
-            <p class="section-label">Regiões para Depilação a Laser</p>
-            <div id="cli-laser-regioes-list" class="check-group" style="flex-wrap:wrap;gap:10px">
-              <!-- preenchido via JS -->
-            </div>
-
-            <p class="section-label" style="margin-top:18px">Método de depilação anterior</p>
-            <div class="check-group">
-              <label><input type="checkbox" id="cli-dep-cera" /> Cera</label>
-              <label><input type="checkbox" id="cli-dep-lamina" /> Lâmina</label>
-            </div>
-
-            <p class="section-label" style="margin-top:18px">Problemas anteriores</p>
-            <div class="check-group">
-              <label><input type="checkbox" id="cli-prob-encrav" /> Encravamento</label>
-              <label><input type="checkbox" id="cli-prob-manchas" /> Manchas</label>
-            </div>
-            <div class="form-group" style="margin-top:12px">
-              <label>Outros problemas</label>
-              <input type="text" id="cli-prob-outros" placeholder="Descreva se houver" />
-            </div>
-          </div>
         </div>
 
-        <!-- ABA 3 — SAÚDE (sem alteração) -->
+        <!-- ABA 3 — SAÚDE -->
         <div id="tab-saude" class="tab-content hidden" style="min-height:420px">
           <div class="anamnese-row">
             <span>Medicamento em uso?</span>
@@ -329,7 +300,7 @@
             <input type="text" id="cli-sol-quando" placeholder="Quando?" class="inline-input" />
           </div>
 
-          <!-- Fitzpatrick só aparece se tiver laser -->
+          <!-- Fitzpatrick — aparece condicionalmente se algum proc com is_laser=1 estiver marcado -->
           <div id="cli-fitz-section" class="hidden">
             <div class="form-group" style="margin-top:20px">
               <label>Classificação Fitzpatrick — Como sua pele reage ao sol?</label>
@@ -348,13 +319,6 @@
                     — Nunca queima, bronzeia muito facilmente</span></label>
               </div>
             </div>
-          </div>
-
-          <div class="anamnese-row" style="margin-top:16px">
-            <label style="font-weight:600; color:var(--rosa-dark)">
-              <input type="checkbox" id="cli-termo" />
-              &nbsp;Afirmo serem verdadeiras todas as informações acima prestadas (Termo de Responsabilidade)
-            </label>
           </div>
         </div>
 
@@ -387,10 +351,6 @@
           <label>
             <input type="checkbox" id="proc-tem-variantes" onchange="_toggleVariantes()" />
             Possui variantes (preços/durações diferentes)
-          </label>
-          <label>
-            <input type="checkbox" id="proc-is-laser" />
-            É Depilação a Laser
           </label>
         </div>
 
@@ -456,6 +416,7 @@
       </div>
     </div>
   </div>
+
   <script src="./js/utils.js"></script>
   <script src="./js/calendario.js"></script>
   <script src="./js/clientes.js"></script>

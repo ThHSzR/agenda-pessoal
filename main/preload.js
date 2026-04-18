@@ -32,25 +32,17 @@ contextBridge.exposeInMainWorld('api', {
   relatorio: {
     abrir: (html) => ipcRenderer.invoke('relatorio:abrir', html),
   },
-
-  laser: {
-  listarRegioes:         ()       => ipcRenderer.invoke('laser:listarRegioes'),
-  salvarRegiao:          (d)      => ipcRenderer.invoke('laser:salvarRegiao', d),
-  getRegioesByCliente:   (id)     => ipcRenderer.invoke('laser:getRegioesByCliente', id),
-  salvarRegioesByCliente:(p)      => ipcRenderer.invoke('laser:salvarRegioesByCliente', p),
-},
-clienteProc: {
-  getInteresse:   (id) => ipcRenderer.invoke('cliente:getProcInteresse', id),
-  salvarInteresse:(p)  => ipcRenderer.invoke('cliente:salvarProcInteresse', p),
-},
-variantes: {
-  listar:  (procId) => ipcRenderer.invoke('variantes:listar', procId),
-  salvar:  (d)      => ipcRenderer.invoke('variantes:salvar', d),
-  excluir: (id)     => ipcRenderer.invoke('variantes:excluir', id),
-},
-clienteVariantes: {
-  getInteresse:    (id) => ipcRenderer.invoke('cliente:getVariantesInteresse', id),
-  salvarInteresse: (p)  => ipcRenderer.invoke('cliente:salvarVariantesInteresse', p),
-},
-
+  clienteProc: {
+    getInteresse:    (id) => ipcRenderer.invoke('cliente:getProcInteresse', id),
+    salvarInteresse: (p)  => ipcRenderer.invoke('cliente:salvarProcInteresse', p),
+  },
+  variantes: {
+    listar:  (procId) => ipcRenderer.invoke('variantes:listar', procId),
+    salvar:  (d)      => ipcRenderer.invoke('variantes:salvar', d),
+    excluir: (id)     => ipcRenderer.invoke('variantes:excluir', id),
+  },
+  clienteVariantes: {
+    getInteresse:    (id) => ipcRenderer.invoke('cliente:getVariantesInteresse', id),
+    salvarInteresse: (p)  => ipcRenderer.invoke('cliente:salvarVariantesInteresse', p),
+  },
 });

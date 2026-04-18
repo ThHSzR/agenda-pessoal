@@ -20,19 +20,14 @@ function _setRadio(name, val) {
   if (el) el.checked = true;
 }
 
-// ── laser/procedimentos helpers ───────────────────────────────
+// ── helpers de checkboxes ─────────────────────────────────────
 function _getCheckedIds(containerSelector) {
   return [...document.querySelectorAll(`${containerSelector} input[type=checkbox]:checked`)]
     .map(cb => parseInt(cb.value));
 }
 
-function _temLaser() {
-  return !!document.querySelector('#cli-proc-interesse-list input[data-laser="1"]:checked');
-}
-
-function _toggleLaserUI() {
-  const temLaser = _temLaser();
-  document.getElementById('cli-laser-section').classList.toggle('hidden', !temLaser);
+function _toggleFitzUI() {
+  const temLaser = !!document.querySelector('#cli-proc-interesse-list input[data-laser="1"]:checked');
   document.getElementById('cli-fitz-section').classList.toggle('hidden', !temLaser);
 }
 
@@ -81,29 +76,16 @@ function filtrarClientes() {
   });
 }
 
-// ── popular checkboxes de procedimentos e regiões laser ───────
-async function _popularProcLaser() {
-  const [procs, regioes] = await Promise.all([
-    window.api.procedimentos.todos(),
-    window.api.laser.listarRegioes()
-  ]);
+// ── popular checkboxes de procedimentos ───────────────────────
+async function _popularProcs() {
+  const procs = await window.api.procedimentos.todos();
 
-  // procedimentos de interesse
   const listProc = document.getElementById('cli-proc-interesse-list');
   listProc.innerHTML = procs.map(p => `
     <label style="display:flex;align-items:center;gap:6px;padding:6px 12px;border:1px solid var(--border);border-radius:20px;cursor:pointer">
       <input type="checkbox" value="${p.id}" data-laser="${p.is_laser || 0}"
-        onchange="_toggleLaserUI()"/>
+        onchange="_toggleFitzUI()"/>
       ${p.nome}
-    </label>
-  `).join('');
-
-  // regiões laser
-  const listLaser = document.getElementById('cli-laser-regioes-list');
-  listLaser.innerHTML = regioes.map(r => `
-    <label style="display:flex;align-items:center;gap:6px;padding:6px 12px;border:1px solid var(--border);border-radius:20px;cursor:pointer">
-      <input type="checkbox" value="${r.id}" data-duracao="${r.duracao_min}" data-valor="${r.valor}"/>
-      ${r.nome} <small style="color:var(--text-muted);margin-left:4px">${r.duracao_min}min · R$${r.valor.toFixed(2)}</small>
     </label>
   `).join('');
 }
@@ -118,9 +100,6 @@ function _resetForm() {
    'cli-obs','cli-sol-quando'
   ].forEach(id => _set(id, ''));
 
-  ['cli-dep-cera','cli-dep-lamina','cli-prob-encrav','cli-prob-manchas','cli-termo']
-    .forEach(id => _setChk(id, 0));
-
   ['r-med','r-roac','r-vitil','r-alergia','r-derm','r-acidos',
    'r-cir','r-anti','r-onco','r-acomp','r-epil','r-horm',
    'r-hirsu','r-gest','r-lact','r-herpes','r-sol'
@@ -128,17 +107,17 @@ function _resetForm() {
 
   document.querySelectorAll('input[name="r-fitz"]').forEach(r => r.checked = false);
 
-  // desmarca todos os checkboxes de proc/laser
-  document.querySelectorAll('#cli-proc-interesse-list input, #cli-laser-regioes-list input')
+  // desmarca todos os checkboxes de proc
+  document.querySelectorAll('#cli-proc-interesse-list input')
     .forEach(cb => cb.checked = false);
 
-  _toggleLaserUI();
+  _toggleFitzUI();
 }
 
 // ── abrir novo ────────────────────────────────────────────────
 async function abrirNovoCliente() {
   document.getElementById('modal-cliente-title').textContent = 'Nova Ficha de Anamnese';
-  await _popularProcLaser();
+  await _popularProcs();
   _resetForm();
   switchTab('tab-dados', document.querySelector('.tab-btn'));
   abrirModal('modal-cliente');
@@ -149,7 +128,7 @@ async function editarCliente(id) {
   const c = await window.api.clientes.buscar(id);
   document.getElementById('modal-cliente-title').textContent = 'Editar Ficha — ' + c.nome;
 
-  await _popularProcLaser();
+  await _popularProcs();
   _resetForm();
 
   // aba 1
@@ -165,26 +144,12 @@ async function editarCliente(id) {
   _set('cli-uf',       c.uf);
 
   // aba 2 — procedimentos de interesse
-  const [procIds, regiaoIds] = await Promise.all([
-    window.api.clienteProc.getInteresse(id),
-    window.api.laser.getRegioesByCliente(id)
-  ]);
+  const procIds = await window.api.clienteProc.getInteresse(id);
   procIds.forEach(pid => {
     const cb = document.querySelector(`#cli-proc-interesse-list input[value="${pid}"]`);
     if (cb) cb.checked = true;
   });
-  regiaoIds.forEach(r => {
-    const cb = document.querySelector(`#cli-laser-regioes-list input[value="${r.id}"]`);
-    if (cb) cb.checked = true;
-  });
-  _toggleLaserUI();
-
-  // depilação anterior
-  _setChk('cli-dep-cera',    c.metodo_dep_cera);
-  _setChk('cli-dep-lamina',  c.metodo_dep_lamina);
-  _setChk('cli-prob-encrav', c.prob_encravamento);
-  _setChk('cli-prob-manchas',c.prob_manchas);
-  _set('cli-prob-outros',    c.prob_outros);
+  _toggleFitzUI();
 
   // aba 3
   _setRadio('r-med',     c.medicamento_uso);    _set('cli-med-qual',    c.medicamento_qual);
@@ -215,7 +180,6 @@ async function editarCliente(id) {
     const fe = document.querySelector(`input[name="r-fitz"][value="${c.fitzpatrick}"]`);
     if (fe) fe.checked = true;
   }
-  _setChk('cli-termo', c.termo_assinado);
 
   switchTab('tab-dados', document.querySelector('.tab-btn'));
   abrirModal('modal-cliente');
@@ -225,6 +189,8 @@ async function editarCliente(id) {
 async function salvarCliente() {
   const nome = _v('cli-nome').trim();
   if (!nome) { toast('Nome é obrigatório', 'error'); return; }
+
+  const temLaser = !!document.querySelector('#cli-proc-interesse-list input[data-laser="1"]:checked');
 
   const dados = {
     id: _v('cli-id') || null,
@@ -238,12 +204,6 @@ async function salvarCliente() {
     cidade:                  _v('cli-cidade'),
     uf:                      _v('cli-uf'),
     areas_tratar:            '',
-    metodo_dep_cera:         _chk('cli-dep-cera'),
-    metodo_dep_lamina:       _chk('cli-dep-lamina'),
-    metodo_dep_laser:        _temLaser() ? 1 : 0,
-    prob_encravamento:       _chk('cli-prob-encrav'),
-    prob_manchas:            _chk('cli-prob-manchas'),
-    prob_outros:             _v('cli-prob-outros'),
     medicamento_uso:         _radioVal('r-med'),
     medicamento_qual:        _v('cli-med-qual'),
     roacutan:                _radioVal('r-roac'),
@@ -273,21 +233,15 @@ async function salvarCliente() {
     cor_pelos:               _v('cli-pelos'),
     tomou_sol:               _radioVal('r-sol'),
     sol_quando:              _v('cli-sol-quando'),
-    fitzpatrick:             _temLaser() ? _radioVal('r-fitz') : 0,
-    termo_assinado:          _chk('cli-termo'),
+    fitzpatrick:             temLaser ? _radioVal('r-fitz') : 0,
     observacoes:             _v('cli-obs'),
   };
 
   await window.api.clientes.salvar(dados);
   const clienteId = dados.id || await _getLastInsertedClienteId();
 
-  // salva procedimentos de interesse e regiões laser
-  const procIds    = _getCheckedIds('#cli-proc-interesse-list');
-  const regiaoIds  = _getCheckedIds('#cli-laser-regioes-list');
-  await Promise.all([
-    window.api.clienteProc.salvarInteresse({ clienteId, procedimentoIds: procIds }),
-    window.api.laser.salvarRegioesByCliente({ clienteId, regiaoIds }),
-  ]);
+  const procIds = _getCheckedIds('#cli-proc-interesse-list');
+  await window.api.clienteProc.salvarInteresse({ clienteId, procedimentoIds: procIds });
 
   fecharModal('modal-cliente');
   toast('Ficha salva com sucesso!', 'success');
