@@ -68,7 +68,7 @@ function renderLinhasAgend(lista) {
       </td>
      <td>
   <button class="btn btn-whatsapp btn-sm"
-    onclick="abrirWhatsApp('${a.cliente_telefone}', '{saudacao}! Passando para confirmar seu horário hoje. Tudo certo? 😊')"
+    onclick="abrirWhatsApp('${a.cliente_telefone}', '${a.data_hora}')"
     title="Confirmar via WhatsApp">💬</button>
   <button class="btn btn-info btn-sm" onclick="editarAgendamento(${a.id})">✏️</button>
   <button class="btn btn-danger btn-sm" onclick="excluirAgend(${a.id})">🗑️</button>

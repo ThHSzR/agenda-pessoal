@@ -56,14 +56,45 @@ function toDbDatetime(inputVal) {
   return inputVal.replace('T', ' ') + ':00';
 }
 
-function abrirWhatsApp(telefone, mensagem) {
+function abrirWhatsApp(telefone, dataHoraAgend) {
   if (!telefone) { toast('Cliente sem telefone cadastrado.', 'error'); return; }
+
   const num = telefone.replace(/\D/g, '');
-  const hora = new Date().getHours();
-  const saudacao = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
-  const texto = mensagem
-    ? mensagem.replace('{saudacao}', saudacao)
-    : saudacao + '!';
-  const url = `https://wa.me/55${num}?text=${encodeURIComponent(texto)}`;
-  window.open(url, '_blank');
+
+  // Saudação baseada na hora ATUAL
+  const horaAtual = new Date().getHours();
+  const saudacao  = horaAtual < 12 ? 'Bom dia' : horaAtual < 18 ? 'Boa tarde' : 'Boa noite';
+
+  // Referência ao dia do agendamento
+  let refDia = '';
+  if (dataHoraAgend) {
+    const agora     = new Date();
+    const dAgend    = new Date(dataHoraAgend.replace(' ', 'T'));
+    const hojeStr   = agora.toISOString().slice(0, 10);
+    const agendStr  = dAgend.toISOString().slice(0, 10);
+
+    const amanhaDate = new Date(agora);
+    amanhaDate.setDate(agora.getDate() + 1);
+    const amanhaStr = amanhaDate.toISOString().slice(0, 10);
+
+    const diasSemana = ['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado'];
+    const hora       = dAgend.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const diaSemNome = diasSemana[dAgend.getDay()];
+    const diaNum     = String(dAgend.getDate()).padStart(2, '0');
+    const mesNum     = String(dAgend.getMonth() + 1).padStart(2, '0');
+
+    if (agendStr === hojeStr) {
+      refDia = `hoje às ${hora}`;
+    } else if (agendStr === amanhaStr) {
+      refDia = `amanhã às ${hora}`;
+    } else {
+      refDia = `${diaSemNome}, dia ${diaNum}/${mesNum}, às ${hora}`;
+    }
+  }
+
+  const texto = refDia
+    ? `${saudacao}! 😊 Passando para confirmar o seu horário ${refDia}. Tudo certo?`
+    : `${saudacao}! 😊`;
+
+  window.open(`https://wa.me/55${num}?text=${encodeURIComponent(texto)}`, '_blank');
 }
