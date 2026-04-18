@@ -22,20 +22,130 @@ function auth(req, res, next) {
   res.status(401).json({ erro: 'Não autenticado' });
 }
 
+// No topo, adicione:
+const rateLimit = require('express-rate-limit');
+
+// Substitua o bloco app.use(session({...})) por:
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'dev-secret-troque-em-producao',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,          // JS do browser não acessa o cookie
+    secure: false,           // mude para true se usar HTTPS
+    sameSite: 'strict',
+    maxAge: 8 * 60 * 60 * 1000
+  }
+}));
+
+// Rate limit: máx 10 tentativas de login por 15 min por IP
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { erro: 'Muitas tentativas. Aguarde 15 minutos.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Middleware de auth normal
+function auth(req, res, next) {
+  if (req.session?.logado) return next();
+  res.status(401).json({ erro: 'Não autenticado' });
+}
+
+// Middleware exclusivo para admin
+function authAdmin(req, res, next) {
+  if (req.session?.logado && req.session?.is_admin) return next();
+  res.status(403).json({ erro: 'Acesso negado' });
+}
+
 // ─── AUTH ────────────────────────────────────────────────────
-app.post('/api/login', (req, res) => {
+app.post('/api/login', loginLimiter, (req, res) => {
   const { usuario, senha } = req.body;
+  if (!usuario || !senha)
+    return res.status(400).json({ erro: 'Preencha usuário e senha' });
+
   const db = getDb();
+
+  // cria admin padrão apenas se não existe nenhum usuário
   const total = db.prepare('SELECT COUNT(*) as n FROM usuarios').get().n;
   if (total === 0) {
-    db.prepare('INSERT INTO usuarios (usuario, senha) VALUES (?,?)')
-      .run('admin', bcrypt.hashSync('admin123', 10));
+    db.prepare('INSERT INTO usuarios (usuario, senha, is_admin) VALUES (?,?,1)')
+      .run('admin', bcrypt.hashSync('admin123', 12));
   }
+
   const user = db.prepare('SELECT * FROM usuarios WHERE usuario=?').get(usuario);
   if (!user || !bcrypt.compareSync(senha, user.senha))
     return res.status(401).json({ erro: 'Usuário ou senha incorretos' });
-  req.session.logado  = true;
-  req.session.usuario = user.usuario;
+
+  req.session.regenerate((err) => {           // previne session fixation
+    if (err) return res.status(500).json({ erro: 'Erro interno' });
+    req.session.logado   = true;
+    req.session.usuario  = user.usuario;
+    req.session.is_admin = !!user.is_admin;
+    res.json({ ok: true, is_admin: !!user.is_admin });
+  });
+});
+
+app.post('/api/logout', auth, (req, res) => {
+  req.session.destroy(() => res.json({ ok: true }));
+});
+
+app.get('/api/me', (req, res) => {
+  if (req.session?.logado)
+    return res.json({ usuario: req.session.usuario, is_admin: !!req.session.is_admin });
+  res.status(401).json({ erro: 'Não autenticado' });
+});
+
+// ─── USUÁRIOS (apenas admin) ─────────────────────────────────
+app.get('/api/usuarios', authAdmin, (req, res) => {
+  // nunca retorna a senha
+  res.json(getDb().prepare(
+    'SELECT id, usuario, is_admin, criado_em FROM usuarios ORDER BY usuario'
+  ).all());
+});
+
+app.post('/api/usuarios', authAdmin, (req, res) => {
+  const { usuario, senha, is_admin } = req.body;
+  if (!usuario || !senha)
+    return res.status(400).json({ erro: 'Usuário e senha são obrigatórios' });
+  if (senha.length < 6)
+    return res.status(400).json({ erro: 'Senha mínima: 6 caracteres' });
+
+  const db = getDb();
+  const existe = db.prepare('SELECT id FROM usuarios WHERE usuario=?').get(usuario);
+  if (existe) return res.status(409).json({ erro: 'Usuário já existe' });
+
+  const hash = bcrypt.hashSync(senha, 12);
+  const r = db.prepare('INSERT INTO usuarios (usuario, senha, is_admin) VALUES (?,?,?)')
+    .run(usuario, hash, is_admin ? 1 : 0);
+  res.json({ id: r.lastInsertRowid });
+});
+
+app.patch('/api/usuarios/:id/senha', authAdmin, (req, res) => {
+  const { senha } = req.body;
+  if (!senha || senha.length < 6)
+    return res.status(400).json({ erro: 'Senha mínima: 6 caracteres' });
+  getDb().prepare('UPDATE usuarios SET senha=? WHERE id=?')
+    .run(bcrypt.hashSync(senha, 12), req.params.id);
+  res.json({ ok: true });
+});
+
+app.delete('/api/usuarios/:id', authAdmin, (req, res) => {
+  const db = getDb();
+  // não pode excluir a si mesmo
+  const alvo = db.prepare('SELECT usuario FROM usuarios WHERE id=?').get(req.params.id);
+  if (!alvo) return res.status(404).json({ erro: 'Não encontrado' });
+  if (alvo.usuario === req.session.usuario)
+    return res.status(400).json({ erro: 'Você não pode excluir sua própria conta' });
+
+  // garante que sempre sobra ao menos 1 admin
+  const totalAdmins = db.prepare("SELECT COUNT(*) as n FROM usuarios WHERE is_admin=1").get().n;
+  const eAdmin = db.prepare('SELECT is_admin FROM usuarios WHERE id=?').get(req.params.id)?.is_admin;
+  if (eAdmin && totalAdmins <= 1)
+    return res.status(400).json({ erro: 'Não é possível remover o único administrador' });
+
+  db.prepare('DELETE FROM usuarios WHERE id=?').run(req.params.id);
   res.json({ ok: true });
 });
 
