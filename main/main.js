@@ -4,9 +4,34 @@ const { getDb } = require('./database');
 
 app.commandLine.appendSwitch('lang', 'pt-BR');
 
-try {
-  require('electron-reloader')(module, { watchRenderer: true });
-} catch (_) {}
+try { require('electron-reloader')(module, { watchRenderer: true }); } catch (_) {}
+
+// ── LOG ──────────────────────────────────────────────────────
+function log(nivel, canal, msg, extra) {
+  const ts = new Date().toLocaleTimeString('pt-BR');
+  const linha = `[${ts}] [${nivel}] [${canal}] ${msg}`;
+  if (extra !== undefined) {
+    if (nivel === 'ERROR') console.error(linha, extra);
+    else                   console.log(linha, extra);
+  } else {
+    if (nivel === 'ERROR') console.error(linha);
+    else                   console.log(linha);
+  }
+}
+
+function ipc(canal, fn) {
+  ipcMain.handle(canal, async (event, ...args) => {
+    log('INFO', canal, '→ chamado', args[0] ?? '');
+    try {
+      const result = await fn(event, ...args);
+      log('OK  ', canal, '← ok');
+      return result;
+    } catch (err) {
+      log('ERROR', canal, '✖ erro:', err.message);
+      throw err;
+    }
+  });
+}
 
 let mainWindow;
 
@@ -22,22 +47,23 @@ function createWindow() {
     show: false
   });
   mainWindow.loadFile(path.join(__dirname, '../src/index.html'));
-  mainWindow.once('ready-to-show', () => mainWindow.show());
+  mainWindow.once('ready-to-show', () => {
+    log('INFO', 'app', 'Janela pronta');
+    mainWindow.show();
+  });
 }
 
 app.whenReady().then(() => { createWindow(); scheduleNotifications(); });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 
 // ─── CLIENTES ───────────────────────────────────────────────
-ipcMain.handle('clientes:listar', () => {
-  return getDb().prepare('SELECT * FROM clientes ORDER BY nome').all();
-});
+ipc('clientes:listar', () =>
+  getDb().prepare('SELECT * FROM clientes ORDER BY nome').all());
 
-ipcMain.handle('clientes:buscar', (_, id) => {
-  return getDb().prepare('SELECT * FROM clientes WHERE id = ?').get(id);
-});
+ipc('clientes:buscar', (_, id) =>
+  getDb().prepare('SELECT * FROM clientes WHERE id = ?').get(id));
 
-ipcMain.handle('clientes:salvar', (_, d) => {
+ipc('clientes:salvar', (_, d) => {
   const db = getDb();
   const fields = [
     'nome','data_nascimento','cpf','email','telefone','celular','endereco','cidade','uf',
@@ -60,27 +86,28 @@ ipcMain.handle('clientes:salvar', (_, d) => {
   if (d.id) {
     const sets = fields.map(f => `${f}=?`).join(',');
     db.prepare(`UPDATE clientes SET ${sets} WHERE id=?`).run(...vals, d.id);
+    log('INFO', 'clientes:salvar', `UPDATE id=${d.id} nome="${d.nome}"`);
   } else {
     const cols = fields.join(',');
     const phs  = fields.map(() => '?').join(',');
-    db.prepare(`INSERT INTO clientes (${cols}) VALUES (${phs})`).run(...vals);
+    const r = db.prepare(`INSERT INTO clientes (${cols}) VALUES (${phs})`).run(...vals);
+    log('INFO', 'clientes:salvar', `INSERT novo id=${r.lastInsertRowid} nome="${d.nome}"`);
   }
 });
 
-ipcMain.handle('clientes:excluir', (_, id) => {
+ipc('clientes:excluir', (_, id) => {
   getDb().prepare('DELETE FROM clientes WHERE id = ?').run(id);
+  log('INFO', 'clientes:excluir', `id=${id}`);
 });
 
 // ─── PROCEDIMENTOS ──────────────────────────────────────────
-ipcMain.handle('procedimentos:listar', () => {
-  return getDb().prepare('SELECT * FROM procedimentos WHERE ativo=1 ORDER BY nome').all();
-});
+ipc('procedimentos:listar', () =>
+  getDb().prepare('SELECT * FROM procedimentos WHERE ativo=1 ORDER BY nome').all());
 
-ipcMain.handle('procedimentos:todos', () => {
-  return getDb().prepare('SELECT * FROM procedimentos ORDER BY nome').all();
-});
+ipc('procedimentos:todos', () =>
+  getDb().prepare('SELECT * FROM procedimentos ORDER BY nome').all());
 
-ipcMain.handle('procedimentos:salvar', (_, d) => {
+ipc('procedimentos:salvar', (_, d) => {
   const db = getDb();
   if (d.id) {
     db.prepare(`UPDATE procedimentos SET nome=?,descricao=?,duracao_min=?,valor=?,ativo=?,is_laser=?,tem_variantes=? WHERE id=?`)
@@ -93,18 +120,14 @@ ipcMain.handle('procedimentos:salvar', (_, d) => {
   }
 });
 
-ipcMain.handle('procedimentos:excluir', (_, id) => {
-  getDb().prepare('UPDATE procedimentos SET ativo=0 WHERE id=?').run(id);
-});
+ipc('procedimentos:excluir', (_, id) =>
+  getDb().prepare('UPDATE procedimentos SET ativo=0 WHERE id=?').run(id));
 
 // ─── VARIANTES ───────────────────────────────────────────────
-ipcMain.handle('variantes:listar', (_, procedimentoId) => {
-  return getDb().prepare(
-    'SELECT * FROM procedimento_variantes WHERE procedimento_id=? ORDER BY nome'
-  ).all(procedimentoId);
-});
+ipc('variantes:listar', (_, procedimentoId) =>
+  getDb().prepare('SELECT * FROM procedimento_variantes WHERE procedimento_id=? ORDER BY nome').all(procedimentoId));
 
-ipcMain.handle('variantes:salvar', (_, d) => {
+ipc('variantes:salvar', (_, d) => {
   const db = getDb();
   if (d.id) {
     db.prepare(`UPDATE procedimento_variantes SET nome=?,descricao=?,duracao_min=?,valor=?,ativo=? WHERE id=?`)
@@ -115,12 +138,11 @@ ipcMain.handle('variantes:salvar', (_, d) => {
   }
 });
 
-ipcMain.handle('variantes:excluir', (_, id) => {
-  getDb().prepare('DELETE FROM procedimento_variantes WHERE id=?').run(id);
-});
+ipc('variantes:excluir', (_, id) =>
+  getDb().prepare('DELETE FROM procedimento_variantes WHERE id=?').run(id));
 
 // ─── AGENDAMENTOS ────────────────────────────────────────────
-ipcMain.handle('agendamentos:listar', (_, filtro) => {
+ipc('agendamentos:listar', (_, filtro) => {
   let sql = `
     SELECT a.*, c.nome as cliente_nome, c.telefone as cliente_telefone,
            p.nome as procedimento_nome, p.duracao_min,
@@ -142,8 +164,8 @@ ipcMain.handle('agendamentos:listar', (_, filtro) => {
   return getDb().prepare(sql).all(...params);
 });
 
-ipcMain.handle('agendamentos:buscar', (_, id) => {
-  return getDb().prepare(`
+ipc('agendamentos:buscar', (_, id) =>
+  getDb().prepare(`
     SELECT a.*, c.nome as cliente_nome, p.nome as procedimento_nome,
            p.duracao_min, p.tem_variantes,
            v.nome as variante_nome, v.duracao_min as variante_duracao
@@ -152,10 +174,9 @@ ipcMain.handle('agendamentos:buscar', (_, id) => {
     JOIN procedimentos p ON p.id = a.procedimento_id
     LEFT JOIN procedimento_variantes v ON v.id = a.variante_id
     WHERE a.id = ?
-  `).get(id);
-});
+  `).get(id));
 
-ipcMain.handle('agendamentos:salvar', (_, d) => {
+ipc('agendamentos:salvar', (_, d) => {
   const db = getDb();
   if (d.id) {
     db.prepare(`UPDATE agendamentos SET cliente_id=?,procedimento_id=?,variante_id=?,data_hora=?,status=?,valor_cobrado=?,observacoes=? WHERE id=?`)
@@ -168,29 +189,25 @@ ipcMain.handle('agendamentos:salvar', (_, d) => {
   }
 });
 
-ipcMain.handle('agendamentos:excluir', (_, id) => {
-  getDb().prepare('DELETE FROM agendamentos WHERE id=?').run(id);
-});
+ipc('agendamentos:excluir', (_, id) =>
+  getDb().prepare('DELETE FROM agendamentos WHERE id=?').run(id));
 
-ipcMain.handle('agendamentos:status', (_, { id, status }) => {
-  getDb().prepare('UPDATE agendamentos SET status=? WHERE id=?').run(status, id);
-});
+ipc('agendamentos:status', (_, { id, status }) =>
+  getDb().prepare('UPDATE agendamentos SET status=? WHERE id=?').run(status, id));
 
 // ─── FINANCEIRO ──────────────────────────────────────────────
-ipcMain.handle('financeiro:resumo', (_, { inicio, fim }) => {
-  return getDb().prepare(`
+ipc('financeiro:resumo', (_, { inicio, fim }) =>
+  getDb().prepare(`
     SELECT
       COUNT(*) as total_agendamentos,
       SUM(CASE WHEN status='concluido' THEN valor_cobrado ELSE 0 END) as recebido,
       SUM(CASE WHEN status='agendado'  THEN valor_cobrado ELSE 0 END) as a_receber,
       SUM(CASE WHEN status='cancelado' THEN 1 ELSE 0 END) as cancelados
-    FROM agendamentos
-    WHERE date(data_hora) BETWEEN ? AND ?
-  `).get(inicio, fim);
-});
+    FROM agendamentos WHERE date(data_hora) BETWEEN ? AND ?
+  `).get(inicio, fim));
 
-ipcMain.handle('financeiro:detalhado', (_, { inicio, fim }) => {
-  return getDb().prepare(`
+ipc('financeiro:detalhado', (_, { inicio, fim }) =>
+  getDb().prepare(`
     SELECT a.data_hora, a.status, a.valor_cobrado,
            c.nome as cliente_nome, p.nome as procedimento_nome
     FROM agendamentos a
@@ -198,17 +215,14 @@ ipcMain.handle('financeiro:detalhado', (_, { inicio, fim }) => {
     JOIN procedimentos p ON p.id = a.procedimento_id
     WHERE date(a.data_hora) BETWEEN ? AND ?
     ORDER BY a.data_hora
-  `).all(inicio, fim);
-});
+  `).all(inicio, fim));
 
 // ─── INTERESSE VARIANTES ─────────────────────────────────────
-ipcMain.handle('cliente:getVariantesInteresse', (_, clienteId) => {
-  return getDb().prepare(
-    'SELECT variante_id FROM cliente_variantes_interesse WHERE cliente_id=?'
-  ).all(clienteId).map(r => r.variante_id);
-});
+ipc('cliente:getVariantesInteresse', (_, clienteId) =>
+  getDb().prepare('SELECT variante_id FROM cliente_variantes_interesse WHERE cliente_id=?')
+    .all(clienteId).map(r => r.variante_id));
 
-ipcMain.handle('cliente:salvarVariantesInteresse', (_, { clienteId, varianteIds }) => {
+ipc('cliente:salvarVariantesInteresse', (_, { clienteId, varianteIds }) => {
   const db = getDb();
   db.prepare('DELETE FROM cliente_variantes_interesse WHERE cliente_id=?').run(clienteId);
   const ins = db.prepare('INSERT OR IGNORE INTO cliente_variantes_interesse (cliente_id, variante_id) VALUES (?,?)');
@@ -216,14 +230,11 @@ ipcMain.handle('cliente:salvarVariantesInteresse', (_, { clienteId, varianteIds 
 });
 
 // ─── PROCEDIMENTOS INTERESSE ─────────────────────────────────
-ipcMain.handle('cliente:getProcInteresse', (_, clienteId) => {
-  return getDb().prepare(`
-    SELECT procedimento_id FROM cliente_procedimentos_interesse
-    WHERE cliente_id = ?
-  `).all(clienteId).map(r => r.procedimento_id);
-});
+ipc('cliente:getProcInteresse', (_, clienteId) =>
+  getDb().prepare('SELECT procedimento_id FROM cliente_procedimentos_interesse WHERE cliente_id=?')
+    .all(clienteId).map(r => r.procedimento_id));
 
-ipcMain.handle('cliente:salvarProcInteresse', (_, { clienteId, procedimentoIds }) => {
+ipc('cliente:salvarProcInteresse', (_, { clienteId, procedimentoIds }) => {
   const db = getDb();
   db.prepare('DELETE FROM cliente_procedimentos_interesse WHERE cliente_id=?').run(clienteId);
   const ins = db.prepare('INSERT INTO cliente_procedimentos_interesse (cliente_id, procedimento_id) VALUES (?,?)');
@@ -232,12 +243,13 @@ ipcMain.handle('cliente:salvarProcInteresse', (_, { clienteId, procedimentoIds }
 
 // ─── NOTIFICAÇÕES ────────────────────────────────────────────
 function scheduleNotifications() {
+  log('INFO', 'notif', 'Scheduler iniciado (intervalo 60s)');
   setInterval(() => {
     const agora = new Date();
-    const em30 = new Date(agora.getTime() + 30 * 60000);
-    const janela_inicio = em30.toISOString().slice(0, 16).replace('T', ' ');
-    const em31 = new Date(agora.getTime() + 31 * 60000);
-    const janela_fim = em31.toISOString().slice(0, 16).replace('T', ' ');
+    const em30  = new Date(agora.getTime() + 30 * 60000);
+    const em31  = new Date(agora.getTime() + 31 * 60000);
+    const inicio = em30.toISOString().slice(0, 16).replace('T', ' ');
+    const fim    = em31.toISOString().slice(0, 16).replace('T', ' ');
     try {
       const proximos = getDb().prepare(`
         SELECT a.data_hora, c.nome as cliente_nome, p.nome as procedimento_nome
@@ -245,23 +257,23 @@ function scheduleNotifications() {
         JOIN clientes c ON c.id = a.cliente_id
         JOIN procedimentos p ON p.id = a.procedimento_id
         WHERE a.data_hora BETWEEN ? AND ? AND a.status = 'agendado'
-      `).all(janela_inicio, janela_fim);
+      `).all(inicio, fim);
+      if (proximos.length) log('INFO', 'notif', `${proximos.length} notificação(ões) disparadas`);
       proximos.forEach(ag => {
         new Notification({
           title: '⏰ Agendamento em 30 minutos',
           body: `${ag.cliente_nome} — ${ag.procedimento_nome}`
         }).show();
       });
-    } catch (e) {}
+    } catch (e) {
+      log('ERROR', 'notif', 'Erro no scheduler:', e.message);
+    }
   }, 60000);
 }
 
-// ─── IMPRESSÃO / RELATÓRIO ───────────────────────────────────
-ipcMain.handle('relatorio:abrir', (_, html) => {
+// ─── IMPRESSÃO ───────────────────────────────────────────────
+ipc('relatorio:abrir', (_, html) => {
   const win = new BrowserWindow({ width: 800, height: 600, show: false });
   win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
-  win.once('ready-to-show', () => {
-    win.show();
-    win.webContents.print({ silent: false, printBackground: true });
-  });
+  win.once('ready-to-show', () => { win.show(); win.webContents.print({ silent: false, printBackground: true }); });
 });

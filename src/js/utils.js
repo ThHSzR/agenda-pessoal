@@ -98,3 +98,61 @@ function abrirWhatsApp(telefone, dataHoraAgend) {
 
   window.open(`https://wa.me/55${num}?text=${encodeURIComponent(texto)}`, '_blank');
 }
+
+function formatarTelefone(input) {
+  // Remove tudo que não for dígito
+  let v = input.value.replace(/\D/g, '');
+
+  // Limita a 11 dígitos (DDD + 9 dígitos)
+  if (v.length > 11) v = v.slice(0, 11);
+
+  // Formata progressivamente
+  if (v.length <= 2) {
+    v = v.replace(/^(\d{0,2})/, '($1');
+  } else if (v.length <= 6) {
+    v = v.replace(/^(\d{2})(\d{0,4})/, '($1) $2');
+  } else if (v.length <= 10) {
+    // Fixo: (00) 0000-0000
+    v = v.replace(/^(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3');
+  } else {
+    // Celular: (00) 00000-0000
+    v = v.replace(/^(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3');
+  }
+
+  input.value = v;
+}
+
+function formatarCPF(input) {
+  let v = input.value.replace(/\D/g, '');
+  if (v.length > 11) v = v.slice(0, 11);
+
+  if (v.length <= 3) {
+    v = v.replace(/^(\d{0,3})/, '$1');
+  } else if (v.length <= 6) {
+    v = v.replace(/^(\d{3})(\d{0,3})/, '$1.$2');
+  } else if (v.length <= 9) {
+    v = v.replace(/^(\d{3})(\d{3})(\d{0,3})/, '$1.$2.$3');
+  } else {
+    v = v.replace(/^(\d{3})(\d{3})(\d{3})(\d{0,2})/, '$1.$2.$3-$4');
+  }
+
+  input.value = v;
+}
+
+// ── LOG ────────────────────────────────────────────────────
+const Log = {
+  _fmt(nivel, ...args) {
+    const ts = new Date().toLocaleTimeString('pt-BR');
+    const prefix = `[${ts}] [${nivel}]`;
+    switch (nivel) {
+      case 'ERROR': console.error(prefix, ...args); break;
+      case 'WARN':  console.warn(prefix, ...args);  break;
+      case 'INFO':  console.info(prefix, ...args);  break;
+      default:      console.log(prefix, ...args);
+    }
+  },
+  info:  (...args) => Log._fmt('INFO',  ...args),
+  warn:  (...args) => Log._fmt('WARN',  ...args),
+  error: (...args) => Log._fmt('ERROR', ...args),
+  debug: (...args) => Log._fmt('DEBUG', ...args),
+};

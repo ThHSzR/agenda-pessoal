@@ -122,22 +122,16 @@
               <input type="date" id="cli-nasc" />
             </div>
             <div class="form-group">
-              <label>CPF</label>
-              <input type="text" id="cli-cpf" placeholder="000.000.000-00" />
+              <label>CPF *</label>
+              <input type="text" id="cli-cpf" placeholder="000.000.000-00" maxlength="14" required
+                oninput="formatarCPF(this)" />
             </div>
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label>Telefone Residencial</label>
-              <input type="tel" id="cli-telefone" placeholder="(00) 0000-0000" />
-            </div>
-            <div class="form-group">
-              <label>Celular / WhatsApp</label>
-              <input type="tel" id="cli-celular" placeholder="(00) 00000-0000" />
-            </div>
-            <div class="form-group">
-              <label>E-mail</label>
-              <input type="email" id="cli-email" />
+              <label>Telefone / WhatsApp *</label>
+              <input type="tel" id="cli-telefone" placeholder="(00) 00000-0000" maxlength="15" required
+                oninput="formatarTelefone(this)" />
             </div>
           </div>
           <div class="form-row">

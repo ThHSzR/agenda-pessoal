@@ -47,23 +47,21 @@ async function renderClientes() {
     <div class="card">
       <table>
         <thead>
-          <tr><th>Nome</th><th>Celular</th><th>E-mail</th><th>Nascimento</th><th>Fitzpatrick</th><th>Ações</th></tr>
-        </thead>
+         <tr><th>Nome</th><th>Telefone</th><th>Nascimento</th><th>Fitzpatrick</th><th>Ações</th></tr></thead>
         <tbody id="tbody-clientes">
           ${lista.length === 0
       ? `<tr><td colspan="6"><div class="empty-state"><div class="icon">👤</div><p>Nenhum cliente cadastrado.</p></div></td></tr>`
       : lista.map(c => `
               <tr data-nome="${c.nome.toLowerCase()}">
                 <td><strong>${c.nome}</strong></td>
-                <td>${c.celular || c.telefone || '-'}</td>
-                <td>${c.email || '-'}</td>
+                <td>${c.telefone || '-'}</td>
                 <td>${fmtData(c.data_nascimento)}</td>
                 <td>${c.fitzpatrick ? 'Tipo ' + c.fitzpatrick : '-'}</td>
                 <td>
                   <button class="btn btn-info btn-sm" onclick="editarCliente(${c.id})">✏️ Editar</button>
                   <button class="btn btn-danger btn-sm" onclick="excluirCliente(${c.id})">🗑️</button>
                   <button class="btn btn-whatsapp btn-sm"
-                    onclick="abrirWhatsApp('${c.celular || c.telefone}', null)"
+                    onclick="abrirWhatsApp('${c.telefone}', null)"
                     title="Abrir WhatsApp">
                     💬
                     </button>
@@ -98,7 +96,7 @@ async function _popularProcs() {
 // ── resetar formulário ────────────────────────────────────────
 function _resetForm() {
   _set('cli-id', '');
-  ['cli-nome', 'cli-nasc', 'cli-cpf', 'cli-email', 'cli-telefone', 'cli-celular',
+  ['cli-nome', 'cli-nasc', 'cli-cpf', 'cli-telefone',
     'cli-endereco', 'cli-cidade', 'cli-uf', 'cli-prob-outros',
     'cli-med-qual', 'cli-alergia-qual', 'cli-derm-qual', 'cli-cir-qual',
     'cli-anti-qual', 'cli-onco-qual', 'cli-acomp-qual', 'cli-horm-qual',
@@ -195,16 +193,17 @@ async function salvarCliente() {
   const nome = _v('cli-nome').trim();
   if (!nome) { toast('Nome é obrigatório', 'error'); return; }
 
-  const temLaser = !!document.querySelector('#cli-proc-interesse-list input[data-laser="1"]:checked');
+  // NOVO: validar CPF e telefone
+  if (!_v('cli-cpf').trim()) { toast('CPF é obrigatório', 'error'); return; }
+  if (!_v('cli-telefone').trim()) { toast('Telefone é obrigatório', 'error'); return; }
 
   const dados = {
     id: _v('cli-id') || null,
     nome,
     data_nascimento: _v('cli-nasc'),
     cpf: _v('cli-cpf'),
-    email: _v('cli-email'),
     telefone: _v('cli-telefone'),
-    celular: _v('cli-celular'),
+    // REMOVIDOS: email, celular
     endereco: _v('cli-endereco'),
     cidade: _v('cli-cidade'),
     uf: _v('cli-uf'),
