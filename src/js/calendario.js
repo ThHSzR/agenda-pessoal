@@ -113,9 +113,10 @@ async function renderSemana() {
   const dias = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
   const hojeStr = hoje();
 
-  let html = `<div class="cal-week">
-    <div class="cal-week-header" style="grid-template-columns: 52px repeat(7, 1fr)">
-      <div></div>
+    let html = `
+    <div class="cal-week">
+      <div class="cal-week-header cal-week-grid">
+        <div class="cal-week-time-head"></div>
       ${diasSemana.map((d,i) => {
         const ds = d.toISOString().slice(0,10);
         const isH = ds === hojeStr;

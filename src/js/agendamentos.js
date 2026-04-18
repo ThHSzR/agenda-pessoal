@@ -8,6 +8,7 @@ async function renderAgendamentos() {
       <button class="btn btn-primary" onclick="abrirNovoAgendamento()">+ Novo Agendamento</button>
     </div>
     <div class="search-bar" style="align-items:center">
+      <button class="btn btn-secondary btn-sm" onclick="agendHoje()">Hoje</button>
       <input type="date" id="filtro-data" value="${hoje()}" onchange="filtrarAgendPorData()"/>
       <button class="btn btn-secondary btn-sm" onclick="limparFiltroAgend()">Todos</button>
     </div>
@@ -23,22 +24,80 @@ async function renderAgendamentos() {
     </div>`;
 }
 
+function calcularStatus(a) {
+  if (a.status === 'concluido' || a.status === 'cancelado') return a.status;
+  const agora = new Date();
+  const dataAg = new Date(a.data_hora.replace(' ', 'T'));
+  if (dataAg < agora) return 'atrasado';
+  return a.status;
+}
+
+const STATUS_CONFIG = {
+  agendado:  { label: 'Agendado',  emoji: '🕐' },
+  atrasado:  { label: 'Atrasado',  emoji: '⚠️' },
+  concluido: { label: 'Concluído', emoji: '✅' },
+  cancelado: { label: 'Cancelado', emoji: '❌' },
+};
+
 function renderLinhasAgend(lista) {
   if (lista.length === 0) return `<tr><td colspan="6"><div class="empty-state"><div class="icon">📋</div><p>Nenhum agendamento encontrado.</p></div></td></tr>`;
-  return lista.map(a => `
+  return lista.map(a => {
+    const statusReal = calcularStatus(a);
+    const cfg = STATUS_CONFIG[statusReal];
+    const opcoesHtml = Object.entries(STATUS_CONFIG).map(([val, c]) => `
+      <div class="status-dropdown-item" onclick="alterarStatusAgend(${a.id}, '${val}'); fecharTodosDropdowns()">
+        <span class="status-dot dot-${val}"></span> ${c.emoji} ${c.label}
+      </div>`).join('');
+
+    return `
     <tr>
       <td>${fmtDataHora(a.data_hora)}</td>
       <td><strong>${a.cliente_nome}</strong></td>
       <td>${a.procedimento_nome}</td>
       <td>${fmtMoeda(a.valor_cobrado)}</td>
-      <td><span class="badge badge-${a.status}">${a.status}</span></td>
+      <td>
+        <div class="status-wrapper">
+          <div class="status-pill status-pill-${statusReal}" onclick="toggleStatusDropdown(this)">
+            ${cfg.emoji} ${cfg.label}
+          </div>
+          <div class="status-dropdown">
+            ${opcoesHtml}
+          </div>
+        </div>
+      </td>
       <td>
         <button class="btn btn-info btn-sm" onclick="editarAgendamento(${a.id})">✏️</button>
-        ${a.status === 'agendado' ? `<button class="btn btn-success btn-sm" onclick="concluirAgend(${a.id})">✔ Concluir</button>` : ''}
-        ${a.status === 'agendado' ? `<button class="btn btn-warning btn-sm" onclick="cancelarAgend(${a.id})">✕ Cancelar</button>` : ''}
         <button class="btn btn-danger btn-sm" onclick="excluirAgend(${a.id})">🗑️</button>
       </td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
+}
+
+function toggleStatusDropdown(pill) {
+  fecharTodosDropdowns();
+  const dropdown = pill.nextElementSibling;
+  const rect = pill.getBoundingClientRect();
+  dropdown.style.top  = (rect.bottom + 4) + 'px';
+  dropdown.style.left = rect.left + 'px';
+  dropdown.classList.add('open');
+  setTimeout(() => document.addEventListener('click', fecharTodosDropdowns, { once: true }), 10);
+}
+
+function fecharTodosDropdowns() {
+  document.querySelectorAll('.status-dropdown.open').forEach(d => d.classList.remove('open'));
+}
+
+async function alterarStatusAgend(id, status) {
+  await window.api.agendamentos.status({ id, status });
+  toast(`Status atualizado para "${status}".`, 'success');
+  // Atualiza só o select sem re-renderizar a tabela toda
+  const lista = await window.api.agendamentos.listar({});
+  const filtroData = document.getElementById('filtro-data')?.value;
+  if (filtroData) {
+    filtrarAgendPorData();
+  } else {
+    document.getElementById('tbody-agend').innerHTML = renderLinhasAgend(lista);
+  }
 }
 
 async function filtrarAgendPorData() {
@@ -133,22 +192,14 @@ async function salvarAgendamento() {
   if (paginaAtiva?.id === 'page-calendario')   renderCalendario();
 }
 
-async function concluirAgend(id) {
-  await window.api.agendamentos.status({ id, status: 'concluido' });
-  toast('Agendamento concluído!', 'success');
-  renderAgendamentos();
-}
-
-async function cancelarAgend(id) {
-  if (!confirm('Cancelar este agendamento?')) return;
-  await window.api.agendamentos.status({ id, status: 'cancelado' });
-  toast('Agendamento cancelado.', 'info');
-  renderAgendamentos();
-}
-
 async function excluirAgend(id) {
   if (!confirm('Excluir este agendamento?')) return;
   await window.api.agendamentos.excluir(id);
   toast('Agendamento excluído.', 'info');
   renderAgendamentos();
+}
+
+function agendHoje() {
+  document.getElementById('filtro-data').value = hoje();
+  filtrarAgendPorData();
 }
