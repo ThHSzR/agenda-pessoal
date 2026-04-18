@@ -535,6 +535,15 @@ textarea {
   color: white;
 }
 
+.btn-whatsapp {
+  background: #25D366;
+  color: #fff;
+  border: none;
+}
+.btn-whatsapp:hover {
+  background: #1ebe5d;
+}
+
 .cal-day .dia-num {
   font-size: 12px;
   font-weight: 600;

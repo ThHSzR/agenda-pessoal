@@ -6,9 +6,9 @@ function switchTab(id, btn) {
   btn.classList.add('active');
 }
 
-function _v(id)           { const e = document.getElementById(id); return e ? e.value : ''; }
-function _set(id, val)    { const e = document.getElementById(id); if (e) e.value = val || ''; }
-function _chk(id)         { const e = document.getElementById(id); return e && e.checked ? 1 : 0; }
+function _v(id) { const e = document.getElementById(id); return e ? e.value : ''; }
+function _set(id, val) { const e = document.getElementById(id); if (e) e.value = val || ''; }
+function _chk(id) { const e = document.getElementById(id); return e && e.checked ? 1 : 0; }
 function _setChk(id, val) { const e = document.getElementById(id); if (e) e.checked = !!val; }
 
 function _radioVal(name) {
@@ -34,7 +34,7 @@ function _toggleFitzUI() {
 // ── render lista ──────────────────────────────────────────────
 async function renderClientes() {
   const lista = await window.api.clientes.listar();
-  const page  = document.getElementById('page-clientes');
+  const page = document.getElementById('page-clientes');
 
   page.innerHTML = `
     <div class="page-header">
@@ -51,8 +51,8 @@ async function renderClientes() {
         </thead>
         <tbody id="tbody-clientes">
           ${lista.length === 0
-            ? `<tr><td colspan="6"><div class="empty-state"><div class="icon">👤</div><p>Nenhum cliente cadastrado.</p></div></td></tr>`
-            : lista.map(c => `
+      ? `<tr><td colspan="6"><div class="empty-state"><div class="icon">👤</div><p>Nenhum cliente cadastrado.</p></div></td></tr>`
+      : lista.map(c => `
               <tr data-nome="${c.nome.toLowerCase()}">
                 <td><strong>${c.nome}</strong></td>
                 <td>${c.celular || c.telefone || '-'}</td>
@@ -62,7 +62,12 @@ async function renderClientes() {
                 <td>
                   <button class="btn btn-info btn-sm" onclick="editarCliente(${c.id})">✏️ Editar</button>
                   <button class="btn btn-danger btn-sm" onclick="excluirCliente(${c.id})">🗑️</button>
-                </td>
+                  <button class="btn btn-whatsapp btn-sm"
+                    onclick="abrirWhatsApp('${c.celular || c.telefone}', null)"
+                    title="Abrir WhatsApp">
+                    💬
+                    </button>
+                  </td>
               </tr>`).join('')}
         </tbody>
       </table>
@@ -93,16 +98,16 @@ async function _popularProcs() {
 // ── resetar formulário ────────────────────────────────────────
 function _resetForm() {
   _set('cli-id', '');
-  ['cli-nome','cli-nasc','cli-cpf','cli-email','cli-telefone','cli-celular',
-   'cli-endereco','cli-cidade','cli-uf','cli-prob-outros',
-   'cli-med-qual','cli-alergia-qual','cli-derm-qual','cli-cir-qual',
-   'cli-anti-qual','cli-onco-qual','cli-acomp-qual','cli-horm-qual',
-   'cli-obs','cli-sol-quando'
+  ['cli-nome', 'cli-nasc', 'cli-cpf', 'cli-email', 'cli-telefone', 'cli-celular',
+    'cli-endereco', 'cli-cidade', 'cli-uf', 'cli-prob-outros',
+    'cli-med-qual', 'cli-alergia-qual', 'cli-derm-qual', 'cli-cir-qual',
+    'cli-anti-qual', 'cli-onco-qual', 'cli-acomp-qual', 'cli-horm-qual',
+    'cli-obs', 'cli-sol-quando'
   ].forEach(id => _set(id, ''));
 
-  ['r-med','r-roac','r-vitil','r-alergia','r-derm','r-acidos',
-   'r-cir','r-anti','r-onco','r-acomp','r-epil','r-horm',
-   'r-hirsu','r-gest','r-lact','r-herpes','r-sol'
+  ['r-med', 'r-roac', 'r-vitil', 'r-alergia', 'r-derm', 'r-acidos',
+    'r-cir', 'r-anti', 'r-onco', 'r-acomp', 'r-epil', 'r-horm',
+    'r-hirsu', 'r-gest', 'r-lact', 'r-herpes', 'r-sol'
   ].forEach(name => _setRadio(name, 0));
 
   document.querySelectorAll('input[name="r-fitz"]').forEach(r => r.checked = false);
@@ -132,16 +137,16 @@ async function editarCliente(id) {
   _resetForm();
 
   // aba 1
-  _set('cli-id',       c.id);
-  _set('cli-nome',     c.nome);
-  _set('cli-nasc',     c.data_nascimento);
-  _set('cli-cpf',      c.cpf);
-  _set('cli-email',    c.email);
+  _set('cli-id', c.id);
+  _set('cli-nome', c.nome);
+  _set('cli-nasc', c.data_nascimento);
+  _set('cli-cpf', c.cpf);
+  _set('cli-email', c.email);
   _set('cli-telefone', c.telefone);
-  _set('cli-celular',  c.celular);
+  _set('cli-celular', c.celular);
   _set('cli-endereco', c.endereco);
-  _set('cli-cidade',   c.cidade);
-  _set('cli-uf',       c.uf);
+  _set('cli-cidade', c.cidade);
+  _set('cli-uf', c.uf);
 
   // aba 2 — procedimentos de interesse
   const procIds = await window.api.clienteProc.getInteresse(id);
@@ -152,29 +157,29 @@ async function editarCliente(id) {
   _toggleFitzUI();
 
   // aba 3
-  _setRadio('r-med',     c.medicamento_uso);    _set('cli-med-qual',    c.medicamento_qual);
-  _setRadio('r-roac',    c.roacutan);
-  _setRadio('r-vitil',   c.tto_vitiligo);
+  _setRadio('r-med', c.medicamento_uso); _set('cli-med-qual', c.medicamento_qual);
+  _setRadio('r-roac', c.roacutan);
+  _setRadio('r-vitil', c.tto_vitiligo);
   _setRadio('r-alergia', c.alergia_medicamento); _set('cli-alergia-qual', c.alergia_qual);
-  _setRadio('r-derm',    c.tratamento_dermato);  _set('cli-derm-qual',    c.tratamento_dermato_qual);
-  _setRadio('r-acidos',  c.usa_acidos);
-  _setRadio('r-cir',     c.cirurgia);            _set('cli-cir-qual',     c.cirurgia_qual);
-  _setRadio('r-anti',    c.anticoncepcional);    _set('cli-anti-qual',    c.anticoncepcional_qual);
-  _setRadio('r-onco',    c.historico_oncologico);_set('cli-onco-qual',    c.oncologico_qual);
-  _setRadio('r-acomp',   c.acompanhamento_medico);_set('cli-acomp-qual', c.acompanhamento_qual);
-  _setRadio('r-epil',    c.epilepsia);
-  _setRadio('r-horm',    c.alteracao_hormonal);  _set('cli-horm-qual',    c.hormonal_qual);
-  _setRadio('r-hirsu',   c.hirsutismo);
-  _setRadio('r-gest',    c.gestante);
-  _setRadio('r-lact',    c.lactante);
-  _setRadio('r-herpes',  c.herpes);
+  _setRadio('r-derm', c.tratamento_dermato); _set('cli-derm-qual', c.tratamento_dermato_qual);
+  _setRadio('r-acidos', c.usa_acidos);
+  _setRadio('r-cir', c.cirurgia); _set('cli-cir-qual', c.cirurgia_qual);
+  _setRadio('r-anti', c.anticoncepcional); _set('cli-anti-qual', c.anticoncepcional_qual);
+  _setRadio('r-onco', c.historico_oncologico); _set('cli-onco-qual', c.oncologico_qual);
+  _setRadio('r-acomp', c.acompanhamento_medico); _set('cli-acomp-qual', c.acompanhamento_qual);
+  _setRadio('r-epil', c.epilepsia);
+  _setRadio('r-horm', c.alteracao_hormonal); _set('cli-horm-qual', c.hormonal_qual);
+  _setRadio('r-hirsu', c.hirsutismo);
+  _setRadio('r-gest', c.gestante);
+  _setRadio('r-lact', c.lactante);
+  _setRadio('r-herpes', c.herpes);
   _set('cli-obs', c.observacoes);
 
   // aba 4
-  _set('cli-olhos',      c.cor_olhos);
-  _set('cli-cabelos',    c.cor_cabelos);
-  _set('cli-pelos',      c.cor_pelos);
-  _setRadio('r-sol',     c.tomou_sol);
+  _set('cli-olhos', c.cor_olhos);
+  _set('cli-cabelos', c.cor_cabelos);
+  _set('cli-pelos', c.cor_pelos);
+  _setRadio('r-sol', c.tomou_sol);
   _set('cli-sol-quando', c.sol_quando);
   if (c.fitzpatrick) {
     const fe = document.querySelector(`input[name="r-fitz"][value="${c.fitzpatrick}"]`);
@@ -195,46 +200,46 @@ async function salvarCliente() {
   const dados = {
     id: _v('cli-id') || null,
     nome,
-    data_nascimento:         _v('cli-nasc'),
-    cpf:                     _v('cli-cpf'),
-    email:                   _v('cli-email'),
-    telefone:                _v('cli-telefone'),
-    celular:                 _v('cli-celular'),
-    endereco:                _v('cli-endereco'),
-    cidade:                  _v('cli-cidade'),
-    uf:                      _v('cli-uf'),
-    areas_tratar:            '',
-    medicamento_uso:         _radioVal('r-med'),
-    medicamento_qual:        _v('cli-med-qual'),
-    roacutan:                _radioVal('r-roac'),
-    tto_vitiligo:            _radioVal('r-vitil'),
-    alergia_medicamento:     _radioVal('r-alergia'),
-    alergia_qual:            _v('cli-alergia-qual'),
-    tratamento_dermato:      _radioVal('r-derm'),
+    data_nascimento: _v('cli-nasc'),
+    cpf: _v('cli-cpf'),
+    email: _v('cli-email'),
+    telefone: _v('cli-telefone'),
+    celular: _v('cli-celular'),
+    endereco: _v('cli-endereco'),
+    cidade: _v('cli-cidade'),
+    uf: _v('cli-uf'),
+    areas_tratar: '',
+    medicamento_uso: _radioVal('r-med'),
+    medicamento_qual: _v('cli-med-qual'),
+    roacutan: _radioVal('r-roac'),
+    tto_vitiligo: _radioVal('r-vitil'),
+    alergia_medicamento: _radioVal('r-alergia'),
+    alergia_qual: _v('cli-alergia-qual'),
+    tratamento_dermato: _radioVal('r-derm'),
     tratamento_dermato_qual: _v('cli-derm-qual'),
-    usa_acidos:              _radioVal('r-acidos'),
-    cirurgia:                _radioVal('r-cir'),
-    cirurgia_qual:           _v('cli-cir-qual'),
-    anticoncepcional:        _radioVal('r-anti'),
-    anticoncepcional_qual:   _v('cli-anti-qual'),
-    historico_oncologico:    _radioVal('r-onco'),
-    oncologico_qual:         _v('cli-onco-qual'),
-    acompanhamento_medico:   _radioVal('r-acomp'),
-    acompanhamento_qual:     _v('cli-acomp-qual'),
-    epilepsia:               _radioVal('r-epil'),
-    alteracao_hormonal:      _radioVal('r-horm'),
-    hormonal_qual:           _v('cli-horm-qual'),
-    hirsutismo:              _radioVal('r-hirsu'),
-    gestante:                _radioVal('r-gest'),
-    herpes:                  _radioVal('r-herpes'),
-    lactante:                _radioVal('r-lact'),
-    cor_olhos:               _v('cli-olhos'),
-    cor_cabelos:             _v('cli-cabelos'),
-    cor_pelos:               _v('cli-pelos'),
-    tomou_sol:               _radioVal('r-sol'),
-    sol_quando:              _v('cli-sol-quando'),
-    fitzpatrick:             temLaser ? _radioVal('r-fitz') : 0,
-    observacoes:             _v('cli-obs'),
+    usa_acidos: _radioVal('r-acidos'),
+    cirurgia: _radioVal('r-cir'),
+    cirurgia_qual: _v('cli-cir-qual'),
+    anticoncepcional: _radioVal('r-anti'),
+    anticoncepcional_qual: _v('cli-anti-qual'),
+    historico_oncologico: _radioVal('r-onco'),
+    oncologico_qual: _v('cli-onco-qual'),
+    acompanhamento_medico: _radioVal('r-acomp'),
+    acompanhamento_qual: _v('cli-acomp-qual'),
+    epilepsia: _radioVal('r-epil'),
+    alteracao_hormonal: _radioVal('r-horm'),
+    hormonal_qual: _v('cli-horm-qual'),
+    hirsutismo: _radioVal('r-hirsu'),
+    gestante: _radioVal('r-gest'),
+    herpes: _radioVal('r-herpes'),
+    lactante: _radioVal('r-lact'),
+    cor_olhos: _v('cli-olhos'),
+    cor_cabelos: _v('cli-cabelos'),
+    cor_pelos: _v('cli-pelos'),
+    tomou_sol: _radioVal('r-sol'),
+    sol_quando: _v('cli-sol-quando'),
+    fitzpatrick: temLaser ? _radioVal('r-fitz') : 0,
+    observacoes: _v('cli-obs'),
   };
 
   await window.api.clientes.salvar(dados);

@@ -55,3 +55,15 @@ function toInputDatetime(iso) {
 function toDbDatetime(inputVal) {
   return inputVal.replace('T', ' ') + ':00';
 }
+
+function abrirWhatsApp(telefone, mensagem) {
+  if (!telefone) { toast('Cliente sem telefone cadastrado.', 'error'); return; }
+  const num = telefone.replace(/\D/g, '');
+  const hora = new Date().getHours();
+  const saudacao = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
+  const texto = mensagem
+    ? mensagem.replace('{saudacao}', saudacao)
+    : saudacao + '!';
+  const url = `https://wa.me/55${num}?text=${encodeURIComponent(texto)}`;
+  window.open(url, '_blank');
+}
