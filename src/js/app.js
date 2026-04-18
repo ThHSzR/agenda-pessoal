@@ -36,6 +36,7 @@ document.querySelectorAll('.nav-link').forEach(a => {
 
   // ← desestrutura cargo também
   const { usuario, is_admin, cargo } = await res.json();
+  window._session = { usuario, is_admin, cargo };
 
 
   // Esconde aba Procedimentos e Financeiro para operadores

@@ -103,17 +103,19 @@ function _resetForm() {
     'cli-obs', 'cli-sol-quando'
   ].forEach(id => _set(id, ''));
 
+  // NOVO: reseta os selects para "Selecione"
+  ['cli-olhos', 'cli-cabelos', 'cli-pelos'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.selectedIndex = 0;
+  });
+
   ['r-med', 'r-roac', 'r-vitil', 'r-alergia', 'r-derm', 'r-acidos',
     'r-cir', 'r-anti', 'r-onco', 'r-acomp', 'r-epil', 'r-horm',
     'r-hirsu', 'r-gest', 'r-lact', 'r-herpes', 'r-sol'
   ].forEach(name => _setRadio(name, 0));
 
   document.querySelectorAll('input[name="r-fitz"]').forEach(r => r.checked = false);
-
-  // desmarca todos os checkboxes de proc
-  document.querySelectorAll('#cli-proc-interesse-list input')
-    .forEach(cb => cb.checked = false);
-
+  document.querySelectorAll('#cli-proc-interesse-list input').forEach(cb => cb.checked = false);
   _toggleFitzUI();
 }
 
@@ -192,22 +194,26 @@ async function editarCliente(id) {
 async function salvarCliente() {
   const nome = _v('cli-nome').trim();
   if (!nome) { toast('Nome é obrigatório', 'error'); return; }
-
-  // NOVO: validar CPF e telefone
   if (!_v('cli-cpf').trim()) { toast('CPF é obrigatório', 'error'); return; }
   if (!_v('cli-telefone').trim()) { toast('Telefone é obrigatório', 'error'); return; }
+
+  // CORRIGIDO: declarar temLaser aqui
+  const temLaser = !!document.querySelector('#cli-proc-interesse-list input[data-laser="1"]:checked');
 
   const dados = {
     id: _v('cli-id') || null,
     nome,
     data_nascimento: _v('cli-nasc'),
     cpf: _v('cli-cpf'),
+    email: '',
     telefone: _v('cli-telefone'),
-    // REMOVIDOS: email, celular
+    celular: '',
     endereco: _v('cli-endereco'),
     cidade: _v('cli-cidade'),
     uf: _v('cli-uf'),
     areas_tratar: '',
+    metodo_dep_cera: 0, metodo_dep_lamina: 0, metodo_dep_laser: 0,
+    prob_encravamento: 0, prob_manchas: 0, prob_outros: '',
     medicamento_uso: _radioVal('r-med'),
     medicamento_qual: _v('cli-med-qual'),
     roacutan: _radioVal('r-roac'),
@@ -238,6 +244,7 @@ async function salvarCliente() {
     tomou_sol: _radioVal('r-sol'),
     sol_quando: _v('cli-sol-quando'),
     fitzpatrick: temLaser ? _radioVal('r-fitz') : 0,
+    termo_assinado: 0,
     observacoes: _v('cli-obs'),
   };
 

@@ -35,41 +35,45 @@
 
   <div id="toast-container"></div>
 
-  <!-- ═══ MODAL AGENDAMENTO ═══ -->
-  <div id="modal-agendamento" class="modal-overlay hidden">
-    <div class="modal">
-      <div class="modal-header">
-        <h2 id="modal-agend-title">Novo Agendamento</h2>
-        <button class="modal-close" onclick="fecharModal('modal-agendamento')">✕</button>
-      </div>
-      <div class="modal-body">
-        <input type="hidden" id="agend-id" />
-        <div class="form-row">
-          <div class="form-group">
-            <label>Cliente *</label>
-            <select id="agend-cliente"></select>
-          </div>
-          <div class="form-group">
-            <label>Procedimento *</label>
-            <select id="agend-procedimento"
-              onchange="_carregarVariantesAgend(this.value, null).then(() => preencherValor())">
-            </select>
-          </div>
+<!-- ═══ MODAL AGENDAMENTO ═══ -->
+<div id="modal-agendamento" class="modal-overlay hidden">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h2 id="modal-agend-title">Novo Agendamento</h2>
+      <button class="modal-close" onclick="fecharModal('modal-agendamento')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="agend-id" />
 
-          <div id="agend-variante-wrap" class="form-group hidden">
-            <label>Variante *</label>
-            <select id="agend-variante" onchange="_preencherValorVariante()"></select>
-          </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Cliente *</label>
+          <select id="agend-cliente"></select>
         </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Data e Hora *</label>
-            <input type="datetime-local" id="agend-data-hora" />
-          </div>
-          <div class="form-group">
-            <label>Valor (R$)</label>
-            <input type="number" id="agend-valor" step="0.01" min="0" />
-          </div>
+        <div class="form-group">
+          <label>Data e Hora *</label>
+          <input type="datetime-local" id="agend-data-hora" />
+        </div>
+      </div>
+
+      <!-- Lista de procedimentos do agendamento -->
+      <div class="form-group">
+        <label>Procedimentos *</label>
+        <div id="agend-procs-lista" style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px"></div>
+        <button class="btn btn-secondary btn-sm" onclick="_agendAdicionarProc()">+ Adicionar procedimento</button>
+      </div>
+
+      <!-- Totais calculados -->
+      <div style="display:flex;gap:24px;padding:10px 14px;background:var(--color-surface-offset);border-radius:var(--radius-md);margin-bottom:12px">
+        <span>⏱ Duração total: <strong id="agend-total-duracao">0 min</strong></span>
+        <span>💰 Valor total: <strong id="agend-total-valor">R$ 0,00</strong></span>
+      </div>
+
+      <!-- Valor editável só por gerente/admin -->
+      <div class="form-row">
+        <div class="form-group">
+          <label id="agend-valor-label">Valor cobrado (R$)</label>
+          <input type="number" id="agend-valor" step="0.01" min="0" />
         </div>
         <div class="form-group">
           <label>Status</label>
@@ -79,17 +83,23 @@
             <option value="cancelado">Cancelado</option>
           </select>
         </div>
-        <div class="form-group">
-          <label>Observações</label>
-          <textarea id="agend-obs" rows="2"></textarea>
-        </div>
       </div>
-      <div class="modal-footer">
+
+      <div class="form-group">
+        <label>Observações</label>
+        <textarea id="agend-obs" rows="2"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer" style="display:flex;justify-content:space-between;align-items:center">
+      <button id="agend-whatsapp-btn" class="btn btn-whatsapp" style="display:none"
+        onclick="_agendWhatsApp()">💬 Confirmar via WhatsApp</button>
+      <div style="display:flex;gap:8px">
         <button class="btn btn-secondary" onclick="fecharModal('modal-agendamento')">Cancelar</button>
         <button class="btn btn-primary" onclick="salvarAgendamento()">💾 Salvar</button>
       </div>
     </div>
   </div>
+</div>
 
   <!-- ═══ MODAL CLIENTE (Ficha de Anamnese) ═══ -->
   <div id="modal-cliente" class="modal-overlay hidden">
