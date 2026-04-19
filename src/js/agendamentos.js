@@ -114,7 +114,7 @@ async function limparFiltroAgend() {
 }
 
 // ── estado interno dos procs do modal ────────────────────────
-let _agendProcsModal = [];
+let _agendProcsModal      = [];
 let _agendClienteTelefone = null;
 let _agendClienteNome     = null;
 let _agendDataHora        = null;
@@ -158,9 +158,15 @@ async function _agendAdicionarProc(procIdSel = null, varianteIdSel = null) {
   linha.id    = `agend-proc-linha-${idx}`;
   linha.style = 'display:flex;gap:8px;align-items:center;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-md);padding:8px';
 
+  // Se for novo agendamento (sem procIdSel), adiciona placeholder
+  const placeholderOpt = procIdSel === null
+    ? `<option value="" disabled selected>— Selecione um procedimento —</option>`
+    : '';
+
   linha.innerHTML = `
     <select id="agend-proc-sel-${idx}" style="flex:2"
       onchange="_agendOnProcChange(${idx})">
+      ${placeholderOpt}
       ${procs.map(p => `<option value="${p.id}" data-valor="${p.valor}" data-duracao="${p.duracao_min}" data-tem-variantes="${p.tem_variantes}"
         ${p.id === procIdSel ? 'selected' : ''}>${p.nome}</option>`).join('')}
     </select>
@@ -173,12 +179,16 @@ async function _agendAdicionarProc(procIdSel = null, varianteIdSel = null) {
   document.getElementById('agend-procs-lista').appendChild(linha);
   _agendProcsModal.push({ procId: null, varianteId: null, valor: 0, duracao: 0 });
 
-  await _agendOnProcChange(idx, varianteIdSel);
+  // Só dispara o change se tiver proc selecionado (edição)
+  if (procIdSel !== null) {
+    await _agendOnProcChange(idx, varianteIdSel);
+  }
 }
 
 async function _agendOnProcChange(idx, varianteIdSel = null) {
   const sel    = document.getElementById(`agend-proc-sel-${idx}`);
   const opt    = sel.options[sel.selectedIndex];
+  if (!opt || !opt.value) return; // placeholder selecionado
   const procId = parseInt(sel.value);
   const temVar = opt.dataset.temVariantes === '1';
   const varSel = document.getElementById(`agend-var-sel-${idx}`);
@@ -232,16 +242,15 @@ async function abrirNovoAgendamento(dataHoraPre) {
   const clientes = await window.api.clientes.listar();
   if (clientes.length === 0) { toast('Cadastre um cliente primeiro.', 'error'); return; }
 
-  document.getElementById('modal-agend-title').textContent   = 'Novo Agendamento';
-  document.getElementById('agend-id').value                  = '';
-  document.getElementById('agend-status').value              = 'agendado';
-  document.getElementById('agend-obs').value                 = '';
-  document.getElementById('agend-valor').value               = '';
-  document.getElementById('agend-data-hora').value           = dataHoraPre || '';
-  document.getElementById('agend-procs-lista').innerHTML     = '';
+  document.getElementById('modal-agend-title').textContent    = 'Novo Agendamento';
+  document.getElementById('agend-id').value                   = '';
+  document.getElementById('agend-status').value               = 'agendado';
+  document.getElementById('agend-obs').value                  = '';
+  document.getElementById('agend-valor').value                = '';
+  document.getElementById('agend-data-hora').value            = dataHoraPre || '';
+  document.getElementById('agend-procs-lista').innerHTML      = '';
   document.getElementById('agend-whatsapp-btn').style.display = 'none';
 
-  // ── cliente: opção vazia como placeholder ──
   document.getElementById('agend-cliente').innerHTML =
     `<option value="" disabled selected>— Selecione um cliente —</option>` +
     clientes.map(c => `<option value="${c.id}" data-tel="${c.telefone || ''}">${c.nome}</option>`).join('');
@@ -251,9 +260,7 @@ async function abrirNovoAgendamento(dataHoraPre) {
   _agendClienteNome     = null;
   _agendDataHora        = null;
 
-  await _agendAdicionarProc();
-  // Limpa o valor após adicionar o primeiro proc (que preenche automaticamente)
-  document.getElementById('agend-valor').value = '';
+  await _agendAdicionarProc(); // sem procIdSel → mostra placeholder
   _agendRecalcular();
   abrirModal('modal-agendamento');
 }
@@ -284,7 +291,6 @@ async function editarAgendamento(id) {
 
   _agendProcsModal = [];
 
-  // Usa o array procs[] retornado pelo servidor (novo formato)
   const procsExistentes = Array.isArray(a.procs) && a.procs.length > 0
     ? a.procs
     : (a.procedimento_id ? [{ procedimento_id: a.procedimento_id, variante_id: a.variante_id || null }] : []);
@@ -306,7 +312,7 @@ async function salvarAgendamento() {
   const dataHora  = document.getElementById('agend-data-hora').value;
   if (!clienteId || !dataHora) { toast('Preencha os campos obrigatórios.', 'error'); return; }
 
-  const procsValidos = _agendProcsModal.filter(Boolean);
+  const procsValidos = _agendProcsModal.filter(p => p && p.procId);
   if (procsValidos.length === 0) { toast('Adicione ao menos um procedimento.', 'error'); return; }
 
   await window.api.agendamentos.salvar({
