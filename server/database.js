@@ -63,11 +63,26 @@ function initTables() {
     );
     CREATE TABLE IF NOT EXISTS agendamentos (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      cliente_id INTEGER NOT NULL, procedimento_id INTEGER NOT NULL,
-      variante_id INTEGER, data_hora TEXT NOT NULL,
-      status TEXT DEFAULT 'agendado', valor_cobrado REAL, observacoes TEXT,
+      cliente_id INTEGER NOT NULL,
+      procedimento_id INTEGER,
+      variante_id INTEGER,
+      data_hora TEXT NOT NULL,
+      status TEXT DEFAULT 'agendado',
+      valor_cobrado REAL,
+      observacoes TEXT,
       criado_em TEXT DEFAULT (datetime('now','localtime')),
       FOREIGN KEY (cliente_id)      REFERENCES clientes(id),
+      FOREIGN KEY (procedimento_id) REFERENCES procedimentos(id),
+      FOREIGN KEY (variante_id)     REFERENCES procedimento_variantes(id)
+    );
+    CREATE TABLE IF NOT EXISTS agendamento_procedimentos (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      agendamento_id  INTEGER NOT NULL,
+      procedimento_id INTEGER NOT NULL,
+      variante_id     INTEGER,
+      valor           REAL DEFAULT 0,
+      duracao_min     INTEGER DEFAULT 0,
+      FOREIGN KEY (agendamento_id)  REFERENCES agendamentos(id) ON DELETE CASCADE,
       FOREIGN KEY (procedimento_id) REFERENCES procedimentos(id),
       FOREIGN KEY (variante_id)     REFERENCES procedimento_variantes(id)
     );
@@ -85,7 +100,7 @@ function initTables() {
     );
   `);
 
-  // ── migrações usuarios ────────────────────────────────────
+  // ── migrações usuarios ──────────────────────────────────────────
   const colsUser = db.prepare('PRAGMA table_info(usuarios)').all().map(c => c.name);
   if (!colsUser.includes('is_admin'))
     db.exec('ALTER TABLE usuarios ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0');
@@ -94,17 +109,15 @@ function initTables() {
   if (!colsUser.includes('cargo'))
     db.exec("ALTER TABLE usuarios ADD COLUMN cargo TEXT DEFAULT 'operador'");
 
-  // garante sempre ao menos 1 admin
   const totalAdmins = db.prepare('SELECT COUNT(*) as n FROM usuarios WHERE is_admin=1').get().n;
   if (totalAdmins === 0) {
     const primeiro = db.prepare('SELECT id FROM usuarios ORDER BY id LIMIT 1').get();
     if (primeiro)
       db.prepare('UPDATE usuarios SET is_admin=1, cargo=? WHERE id=?').run('admin', primeiro.id);
   }
-  // sincroniza cargo dos admins existentes que ainda estão como 'operador'
   db.prepare("UPDATE usuarios SET cargo='admin' WHERE is_admin=1 AND (cargo IS NULL OR cargo='operador')").run();
 
-  // ── migrações clientes ────────────────────────────────────
+  // ── migrações clientes ──────────────────────────────────────────
   const colsCli = db.prepare('PRAGMA table_info(clientes)').all().map(c => c.name);
   [
     ['celular','TEXT'], ['endereco','TEXT'], ['cidade','TEXT'], ['uf','TEXT'],
@@ -132,17 +145,49 @@ function initTables() {
       db.exec(`ALTER TABLE clientes ADD COLUMN ${col} ${tipo}`);
   });
 
-  // ── migrações procedimentos ───────────────────────────────
+  // ── migrações procedimentos ───────────────────────────────────────
   const colsProc = db.prepare('PRAGMA table_info(procedimentos)').all().map(c => c.name);
   [['is_laser','INTEGER DEFAULT 0'], ['tem_variantes','INTEGER DEFAULT 0']]
     .forEach(([col, tipo]) => {
       if (!colsProc.includes(col)) db.exec(`ALTER TABLE procedimentos ADD COLUMN ${col} ${tipo}`);
     });
 
-  // ── migrações agendamentos ────────────────────────────────
+  // ── migrações agendamentos ───────────────────────────────────────
   const colsAgend = db.prepare('PRAGMA table_info(agendamentos)').all().map(c => c.name);
   if (!colsAgend.includes('variante_id'))
     db.exec('ALTER TABLE agendamentos ADD COLUMN variante_id INTEGER');
+  // torna procedimento_id opicional (era NOT NULL antes)
+  // SQLite não suporta DROP/ALTER constraint, mas a tabela já foi recriada sem NOT NULL acima
+
+  // ── migra dados legados para agendamento_procedimentos ───────────────
+  // Agendamentos que têm procedimento_id mas ainda não tem entrada em agendamento_procedimentos
+  const legados = db.prepare(`
+    SELECT a.id, a.procedimento_id, a.variante_id, a.valor_cobrado,
+           COALESCE(v.duracao_min, p.duracao_min, 0) as duracao_min
+    FROM agendamentos a
+    JOIN procedimentos p ON p.id = a.procedimento_id
+    LEFT JOIN procedimento_variantes v ON v.id = a.variante_id
+    WHERE a.procedimento_id IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM agendamento_procedimentos ap
+        WHERE ap.agendamento_id = a.id
+      )
+  `).all();
+
+  if (legados.length > 0) {
+    const ins = db.prepare(`
+      INSERT INTO agendamento_procedimentos (agendamento_id, procedimento_id, variante_id, valor, duracao_min)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    const migrar = db.transaction(() => {
+      legados.forEach(row => {
+        ins.run(row.id, row.procedimento_id, row.variante_id || null,
+                row.valor_cobrado || 0, row.duracao_min || 0);
+      });
+    });
+    migrar();
+    console.log(`✅ Migrados ${legados.length} agendamento(s) legado(s) para agendamento_procedimentos.`);
+  }
 }
 
 module.exports = { getDb };
