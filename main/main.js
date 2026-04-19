@@ -143,14 +143,14 @@ ipc('variantes:excluir', (_, id) =>
 
 // ─── AGENDAMENTOS ────────────────────────────────────────────
 ipc('agendamentos:listar', (_, filtro) => {
+  const db = getDb();
   let sql = `
-    SELECT a.*, c.nome as cliente_nome, c.telefone as cliente_telefone,
-           p.nome as procedimento_nome, p.duracao_min,
-           v.nome as variante_nome, v.duracao_min as variante_duracao
+    SELECT a.*,
+           c.nome  AS cliente_nome,
+           c.telefone AS cliente_telefone,
+           c.celular  AS cliente_celular
     FROM agendamentos a
     JOIN clientes c ON c.id = a.cliente_id
-    JOIN procedimentos p ON p.id = a.procedimento_id
-    LEFT JOIN procedimento_variantes v ON v.id = a.variante_id
   `;
   const params = [];
   if (filtro?.data_inicio && filtro?.data_fim) {
@@ -161,32 +161,115 @@ ipc('agendamentos:listar', (_, filtro) => {
     params.push(filtro.data);
   }
   sql += ' ORDER BY a.data_hora';
-  return getDb().prepare(sql).all(...params);
+
+  const agendamentos = db.prepare(sql).all(...params);
+
+  // busca os procedimentos de cada agendamento
+  const getProcs = db.prepare(`
+    SELECT ap.*, p.nome AS procedimento_nome, p.duracao_min AS proc_duracao,
+           v.nome AS variante_nome, v.duracao_min AS variante_duracao
+    FROM agendamento_procedimentos ap
+    JOIN procedimentos p ON p.id = ap.procedimento_id
+    LEFT JOIN procedimento_variantes v ON v.id = ap.variante_id
+    WHERE ap.agendamento_id = ?
+    ORDER BY ap.id
+  `);
+
+  return agendamentos.map(ag => {
+    const procs = getProcs.all(ag.id);
+    return {
+      ...ag,
+      procedimentos: procs,
+      // compat: expõe o primeiro proc nos campos legados
+      procedimento_nome: procs[0]?.procedimento_nome ?? '',
+      variante_nome:     procs[0]?.variante_nome     ?? null,
+      duracao_min:       procs.reduce((s, p) => s + (p.variante_duracao ?? p.proc_duracao ?? 0), 0)
+    };
+  });
 });
 
-ipc('agendamentos:buscar', (_, id) =>
-  getDb().prepare(`
-    SELECT a.*, c.nome as cliente_nome, p.nome as procedimento_nome,
-           p.duracao_min, p.tem_variantes,
-           v.nome as variante_nome, v.duracao_min as variante_duracao
+ipc('agendamentos:buscar', (_, id) => {
+  const db = getDb();
+  const ag = db.prepare(`
+    SELECT a.*, c.nome AS cliente_nome, c.telefone AS cliente_telefone, c.celular AS cliente_celular
     FROM agendamentos a
     JOIN clientes c ON c.id = a.cliente_id
-    JOIN procedimentos p ON p.id = a.procedimento_id
-    LEFT JOIN procedimento_variantes v ON v.id = a.variante_id
     WHERE a.id = ?
-  `).get(id));
+  `).get(id);
+  if (!ag) return null;
+
+  const procs = db.prepare(`
+    SELECT ap.*, p.nome AS procedimento_nome, p.tem_variantes,
+           p.duracao_min AS proc_duracao,
+           v.nome AS variante_nome, v.duracao_min AS variante_duracao
+    FROM agendamento_procedimentos ap
+    JOIN procedimentos p ON p.id = ap.procedimento_id
+    LEFT JOIN procedimento_variantes v ON v.id = ap.variante_id
+    WHERE ap.agendamento_id = ?
+    ORDER BY ap.id
+  `).all(id);
+
+  return {
+    ...ag,
+    procedimentos: procs,
+    procedimento_nome: procs[0]?.procedimento_nome ?? '',
+    variante_nome:     procs[0]?.variante_nome     ?? null,
+    duracao_min:       procs.reduce((s, p) => s + (p.variante_duracao ?? p.proc_duracao ?? 0), 0)
+  };
+});
 
 ipc('agendamentos:salvar', (_, d) => {
   const db = getDb();
-  if (d.id) {
-    db.prepare(`UPDATE agendamentos SET cliente_id=?,procedimento_id=?,variante_id=?,data_hora=?,status=?,valor_cobrado=?,observacoes=? WHERE id=?`)
-      .run(d.cliente_id, d.procedimento_id, d.variante_id || null, d.data_hora, d.status, d.valor_cobrado, d.observacoes, d.id);
-    return d.id;
-  } else {
-    const r = db.prepare(`INSERT INTO agendamentos (cliente_id,procedimento_id,variante_id,data_hora,status,valor_cobrado,observacoes) VALUES (?,?,?,?,?,?,?)`)
-      .run(d.cliente_id, d.procedimento_id, d.variante_id || null, d.data_hora, d.status || 'agendado', d.valor_cobrado, d.observacoes);
-    return r.lastInsertRowid;
-  }
+  const procs = Array.isArray(d.procedimentos) && d.insProcs.length > 0
+    ? d.procedimentos
+    : (d.procedimento_id ? [{ procedimento_id: d.procedimento_id, variante_id: d.variante_id ?? null, valor: d.valor_cobrado ?? 0 }] : []);
+
+  const salvar = db.transaction(() => {
+    let agendamentoId;
+    if (d.id) {
+      db.prepare(`
+        UPDATE agendamentos
+        SET cliente_id=?, data_hora=?, status=?, valor_cobrado=?, observacoes=?,
+            procedimento_id=?, variante_id=?
+        WHERE id=?
+      `).run(
+        d.cliente_id, d.data_hora, d.status, d.valor_cobrado, d.observacoes,
+        procs[0]?.procedimento_id ?? null, procs[0]?.variante_id ?? null,
+        d.id
+      );
+      agendamentoId = d.id;
+      db.prepare('DELETE FROM agendamento_procedimentos WHERE agendamento_id=?').run(agendamentoId);
+    } else {
+      const r = db.prepare(`
+        INSERT INTO agendamentos (cliente_id, data_hora, status, valor_cobrado, observacoes, procedimento_id, variante_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        d.cliente_id, d.data_hora, d.status ?? 'agendado', d.valor_cobrado, d.observacoes,
+        procs[0]?.procedimento_id ?? null, procs[0]?.variante_id ?? null
+      );
+      agendamentoId = r.lastInsertRowid;
+    }
+
+    // insere em agendamento_procedimentos
+    const insAP = db.prepare(`
+      INSERT INTO agendamento_procedimentos (agendamento_id, procedimento_id, variante_id, valor, duracao_min)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    const getDur = db.prepare(`
+      SELECT COALESCE(v.duracao_min, p.duracao_min, 0) AS dur
+      FROM procedimentos p
+      LEFT JOIN procedimento_variantes v ON v.id = ?
+      WHERE p.id = ?
+    `);
+    procs.forEach(p => {
+      const row = getDur.get(p.variante_id ?? null, p.procedimento_id);
+      insAP.run(agendamentoId, p.procedimento_id, p.variante_id ?? null, p.valor ?? 0, row?.dur ?? 0);
+    });
+
+    return agendamentoId;
+  });
+
+  return salvar();
 });
 
 ipc('agendamentos:excluir', (_, id) =>
@@ -206,16 +289,29 @@ ipc('financeiro:resumo', (_, { inicio, fim }) =>
     FROM agendamentos WHERE date(data_hora) BETWEEN ? AND ?
   `).get(inicio, fim));
 
-ipc('financeiro:detalhado', (_, { inicio, fim }) =>
-  getDb().prepare(`
-    SELECT a.data_hora, a.status, a.valor_cobrado,
-           c.nome as cliente_nome, p.nome as procedimento_nome
+ipc('financeiro:detalhado', (_, { inicio, fim }) => {
+  const db = getDb();
+  const agendamentos = db.prepare(`
+    SELECT a.data_hora, a.status, a.valor_cobrado, c.nome AS cliente_nome
     FROM agendamentos a
     JOIN clientes c ON c.id = a.cliente_id
-    JOIN procedimentos p ON p.id = a.procedimento_id
     WHERE date(a.data_hora) BETWEEN ? AND ?
     ORDER BY a.data_hora
-  `).all(inicio, fim));
+  `).all(inicio, fim);
+
+  const getProcs = db.prepare(`
+    SELECT p.nome AS procedimento_nome
+    FROM agendamento_procedimentos ap
+    JOIN procedimentos p ON p.id = ap.procedimento_id
+    WHERE ap.agendamento_id = ?
+    ORDER BY ap.id
+  `);
+
+  return agendamentos.map(ag => ({
+    ...ag,
+    procedimento_nome: getProcs.all(ag.id).map(p => p.procedimento_nome).join(', ') || '—'
+  }));
+});
 
 // ─── INTERESSE VARIANTES ─────────────────────────────────────
 ipc('cliente:getVariantesInteresse', (_, clienteId) =>
@@ -252,11 +348,14 @@ function scheduleNotifications() {
     const fim    = em31.toISOString().slice(0, 16).replace('T', ' ');
     try {
       const proximos = getDb().prepare(`
-        SELECT a.data_hora, c.nome as cliente_nome, p.nome as procedimento_nome
+        SELECT a.data_hora, c.nome AS cliente_nome,
+               GROUP_CONCAT(p.nome, ', ') AS procedimento_nome
         FROM agendamentos a
         JOIN clientes c ON c.id = a.cliente_id
-        JOIN procedimentos p ON p.id = a.procedimento_id
+        JOIN agendamento_procedimentos ap ON ap.agendamento_id = a.id
+        JOIN procedimentos p ON p.id = ap.procedimento_id
         WHERE a.data_hora BETWEEN ? AND ? AND a.status = 'agendado'
+        GROUP BY a.id
       `).all(inicio, fim);
       if (proximos.length) log('INFO', 'notif', `${proximos.length} notificação(ões) disparadas`);
       proximos.forEach(ag => {
