@@ -140,7 +140,7 @@ function _agendRecalcular() {
   const campoValor = document.getElementById('agend-valor');
   if (!_isGerente()) {
     campoValor.readOnly = true;
-    campoValor.style.background = 'var(--color-surface-offset)';
+    campoValor.style.background = 'var(--surface-2)';
     campoValor.style.cursor     = 'not-allowed';
     document.getElementById('agend-valor-label').textContent = 'Valor cobrado (R$) 🔒';
   } else {
@@ -236,7 +236,7 @@ async function _agendAdicionarProc(procIdSel = null, varianteIdSel = null) {
     </select>
     <select id="agend-var-sel-${idx}" style="flex:2;display:none"
       onchange="_agendOnVarChange(${idx})"></select>
-    <span id="agend-proc-info-${idx}" style="flex:1;font-size:var(--text-sm);color:var(--color-text-muted)"></span>
+    <span id="agend-proc-info-${idx}" style="flex:1;font-size:12px;color:var(--text-muted)"></span>
     <button class="btn btn-danger btn-sm" onclick="_agendRemoverProc(${idx})">✕</button>
   `;
 

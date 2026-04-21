@@ -16,7 +16,8 @@
         <img src="./logo.png" alt="Beauty &amp; Beauty" class="sidebar-logo">
       </div>
       <nav>
-        <a class="nav-link active" data-page="calendario"><span class="icon">📅</span> Calendário</a>
+        <a class="nav-link" data-page="dashboard"><span class="icon">📊</span> Dashboard</a>
+        <a class="nav-link" data-page="calendario"><span class="icon">📅</span> Calendário</a>
         <a class="nav-link" data-page="agendamentos"><span class="icon">📋</span> Agendamentos</a>
         <a class="nav-link" data-page="clientes"><span class="icon">👤</span> Clientes</a>
         <a class="nav-link" data-page="procedimentos"><span class="icon">💆</span> Procedimentos</a>
@@ -26,7 +27,8 @@
     </aside>
 
     <main id="content">
-      <div id="page-calendario" class="page"></div>
+      <div id="page-dashboard" class="page"></div>
+      <div id="page-calendario" class="page hidden"></div>
       <div id="page-agendamentos" class="page hidden"></div>
       <div id="page-clientes" class="page hidden"></div>
       <div id="page-procedimentos" class="page hidden"></div>
@@ -80,11 +82,11 @@
       </div>
 
       <!-- Totais -->
-      <div style="display:flex;gap:16px;margin-top:4px;background:var(--color-surface-offset);border-radius:var(--radius-md);padding:10px 14px">
-        <span style="font-size:var(--text-sm);color:var(--color-text-muted)">
+      <div style="display:flex;gap:16px;margin-top:4px;background:var(--surface-2);border-radius:var(--radius);padding:10px 14px">
+        <span style="font-size:12px;color:var(--text-muted)">
           ⏱ Duração total: <strong id="agend-total-duracao">0 min</strong>
         </span>
-        <span style="font-size:var(--text-sm);color:var(--color-text-muted)">
+        <span style="font-size:12px;color:var(--text-muted)">
           💰 Subtotal: <strong id="agend-total-valor">R$ 0,00</strong>
         </span>
       </div>
@@ -613,15 +615,9 @@
   <script src="./js/agendamentos.js"></script>
   <script src="./js/financeiro.js"></script>
   <script src="./js/promocoes.js"></script>
-  <!-- adicione ANTES de app.js -->
+  <script src="./js/dashboard.js"></script>
   <script src="./js/usuarios.js"></script>
   <script src="./js/app.js"></script>
-  <script>
-    (async () => {
-      const res = await fetch('/api/me', { credentials: 'same-origin' });
-      if (!res.ok) window.location.href = '/login.html';
-    })();
-  </script>
 </body>
 
 </html>

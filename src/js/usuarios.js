@@ -3,16 +3,19 @@ async function renderUsuarios() {
   const page  = document.getElementById('page-usuarios');
   if (!page) return;
 
-  const badgeCargo = (u) => {
-    if (u.is_admin)             return '<span style="color:#7c3aed;font-weight:600">👑 Admin</span>';
-    if (u.cargo === 'gerente')  return '<span style="color:#0891b2;font-weight:600">🔑 Gerente</span>';
-    return '<span style="color:#6b7280">Operador</span>';
+  const CARGO_BADGE = {
+    admin:    '<span style="color:#7c3aed;font-weight:600">👑 Admin</span>',
+    gerente:  '<span style="color:#0891b2;font-weight:600">🔑 Gerente</span>',
+    operador: '<span style="color:#6b7280">Operador</span>',
   };
 
   page.innerHTML = `
     <div class="page-header">
       <h1>⚙️ Usuários</h1>
-      <button class="btn btn-primary" onclick="abrirNovoUsuario()">+ Novo Usuário</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-secondary" onclick="fazerBackup()">💾 Backup do Banco</button>
+        <button class="btn btn-primary" onclick="abrirNovoUsuario()">+ Novo Usuário</button>
+      </div>
     </div>
     <div class="card">
       <table>
@@ -23,7 +26,15 @@ async function renderUsuarios() {
           ${lista.map(u => `
             <tr>
               <td><strong>${u.usuario}</strong></td>
-              <td>${badgeCargo(u)}</td>
+              <td>
+                <select class="btn btn-secondary btn-sm" style="padding:4px 8px;font-size:12px"
+                  onchange="trocarCargo(${u.id}, this.value)"
+                  ${u.is_admin ? '' : ''}>
+                  <option value="operador" ${u.cargo === 'operador' ? 'selected' : ''}>Operador</option>
+                  <option value="gerente"  ${u.cargo === 'gerente'  ? 'selected' : ''}>Gerente</option>
+                  <option value="admin"    ${u.cargo === 'admin'    ? 'selected' : ''}>Admin</option>
+                </select>
+              </td>
               <td>
                 <button class="btn btn-info btn-sm" onclick="abrirTrocarSenha(${u.id}, '${u.usuario}')">🔑 Senha</button>
                 <button class="btn btn-danger btn-sm" onclick="excluirUsuario(${u.id}, '${u.usuario}')">🗑️</button>
@@ -57,7 +68,7 @@ async function renderUsuarios() {
             <label>Cargo *</label>
             <select id="nou-cargo">
               <option value="operador">Operador — acesso geral</option>
-              <option value="gerente">Gerente — acesso geral + editar procedimentos</option>
+              <option value="gerente">Gerente — acesso geral + editar procedimentos/promoções</option>
               <option value="admin">Administrador — acesso total</option>
             </select>
           </div>
@@ -114,13 +125,15 @@ async function salvarUsuario() {
   if (senha.length < 6)   { toast('Senha mínima: 6 caracteres', 'error'); return; }
   if (senha !== senha2)   { toast('As senhas não conferem', 'error');      return; }
 
-  const is_admin = cargo === 'admin';
-  const res = await window.api.usuarios.criar({ usuario, senha, is_admin, cargo });
-  if (res?.erro) { toast(res.erro, 'error'); return; }
-
-  fecharModal('modal-usuario');
-  toast('Usuário criado!', 'success');
-  renderUsuarios();
+  try {
+    const is_admin = cargo === 'admin';
+    await window.api.usuarios.criar({ usuario, senha, is_admin, cargo });
+    fecharModal('modal-usuario');
+    toast('Usuário criado!', 'success');
+    renderUsuarios();
+  } catch (e) {
+    toast(e.message || 'Erro ao criar usuário', 'error');
+  }
 }
 
 function abrirTrocarSenha(id, nome) {
@@ -139,17 +152,40 @@ async function confirmarTrocarSenha() {
   if (senha.length < 6) { toast('Senha mínima: 6 caracteres', 'error'); return; }
   if (senha !== senha2)  { toast('As senhas não conferem', 'error');      return; }
 
-  const res = await window.api.usuarios.trocarSenha(id, senha);
-  if (res?.erro) { toast(res.erro, 'error'); return; }
+  try {
+    await window.api.usuarios.trocarSenha(id, senha);
+    fecharModal('modal-senha');
+    toast('Senha alterada!', 'success');
+  } catch (e) {
+    toast(e.message || 'Erro ao trocar senha', 'error');
+  }
+}
 
-  fecharModal('modal-senha');
-  toast('Senha alterada!', 'success');
+async function trocarCargo(id, novoCargo) {
+  try {
+    await window.api.usuarios.trocarCargo(id, novoCargo);
+    toast(`Cargo alterado para ${novoCargo}!`, 'success');
+  } catch (e) {
+    toast(e.message || 'Erro ao alterar cargo', 'error');
+    renderUsuarios(); // reverter UI
+  }
 }
 
 async function excluirUsuario(id, nome) {
   if (!confirm(`Excluir o usuário "${nome}"?`)) return;
-  const res = await window.api.usuarios.excluir(id);
-  if (res?.erro) { toast(res.erro, 'error'); return; }
-  toast('Usuário removido', 'success');
-  renderUsuarios();
+  try {
+    await window.api.usuarios.excluir(id);
+    toast('Usuário removido', 'success');
+    renderUsuarios();
+  } catch (e) {
+    toast(e.message || 'Erro ao excluir', 'error');
+  }
+}
+
+function fazerBackup() {
+  const a = document.createElement('a');
+  a.href = '/api/backup';
+  a.download = 'clinica_backup.db';
+  a.click();
+  toast('Download do backup iniciado!', 'info');
 }
