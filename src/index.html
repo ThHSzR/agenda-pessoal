@@ -13,7 +13,7 @@
 
     <aside id="sidebar">
       <div class="brand">
-        <img src="./logo.png" alt="Beauty & Beauty" class="sidebar-logo">
+        <img src="./logo.png" alt="Beauty &amp; Beauty" class="sidebar-logo">
       </div>
       <nav>
         <a class="nav-link active" data-page="calendario"><span class="icon">📅</span> Calendário</a>
@@ -177,14 +177,15 @@
       <div class="form-row">
         <div class="form-group">
           <label>Tipo de Desconto</label>
-          <select id="promo-tipo-desconto">
-            <option value="percentual">% Percentual</option>
-            <option value="reais">R$ em Reais (valor fixo a subtrair)</option>
+          <select id="promo-tipo-desconto" onchange="_promoAtualizarLabelValor()">
+            <option value="percentual">% Percentual — ex: 10% de desconto</option>
+            <option value="reais">R$ Subtrair — ex: R$ 50 de desconto no total</option>
+            <option value="valor_fixo">R$ Valor Fixo — substitui o total por um valor definido</option>
           </select>
         </div>
         <div class="form-group">
-          <label>Valor do Desconto</label>
-          <input type="number" id="promo-valor-desconto" step="0.01" min="0" placeholder="Ex: 10"/>
+          <label id="promo-label-valor">Percentual de Desconto (%)</label>
+          <input type="number" id="promo-valor-desconto" step="0.01" min="0" placeholder="Ex: 10 (= 10%)"/>
         </div>
       </div>
 
@@ -198,10 +199,8 @@
           </select>
         </div>
         <div class="form-group">
-          <label title="Só usado no modo Mínimo: quantos itens precisam estar no agendamento para a promoção ser aplicada">
-            Itens mínimos no agendamento ❓
-          </label>
-          <input type="number" id="promo-qtd-min" min="1" placeholder="Ex: 2 (somente modo Mínimo)"/>
+          <label title="Só usado no modo Mínimo: quantos itens precisam estar no agendamento para a promoção ser aplicada">Itens mínimos ❓</label>
+          <input type="number" id="promo-qtd-min" min="1" placeholder="Ex: 2 (modo Mínimo)"/>
         </div>
         <div class="form-group">
           <label>Limite de Usos</label>
@@ -254,7 +253,7 @@
         </table>
 
         <!-- Formulário de nova regra -->
-        <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:12px">
+        <div style="background:var(--surface-2,var(--color-surface-offset));border:1px solid var(--border,var(--color-border));border-radius:8px;padding:12px">
           <p class="section-label" style="margin-bottom:10px">Adicionar item à regra</p>
           <div class="form-row" style="align-items:flex-end">
             <div class="form-group" style="margin-bottom:0">
@@ -263,10 +262,10 @@
                 <option value="">— Selecione —</option>
               </select>
             </div>
-            <div class="form-group" style="margin-bottom:0" id="promo-regra-var-group">
-              <label>Variante <span style="font-weight:400;text-transform:none;letter-spacing:0">(se houver)</span></label>
+            <div class="form-group" style="margin-bottom:0">
+              <label>Variante <span style="font-weight:400;text-transform:none;letter-spacing:0">(opcional)</span></label>
               <select id="promo-regra-var">
-                <option value="">— Nenhuma —</option>
+                <option value="">— Nenhuma / Qualquer variante —</option>
               </select>
             </div>
             <div class="form-group" style="margin-bottom:0;max-width:90px">
