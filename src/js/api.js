@@ -61,9 +61,11 @@ const api = {
         getInteresse: (id) => api._fetch('GET', `/api/cliente-variantes/${id}`),
         salvarInteresse: (p) => api._fetch('POST', '/api/cliente-variantes', p),
     },
-    auth: {
-        logout: () => api._fetch('POST', '/api/logout'),
-        me: () => api._fetch('GET', '/api/me'),
+    promocoes: {
+        listar: () => api._fetch('GET', '/api/promocoes'),
+        buscar: (id) => api._fetch('GET', `/api/promocoes/${id}`),
+        salvar: (d) => api._fetch('POST', '/api/promocoes', d),
+        excluir: (id) => api._fetch('DELETE', `/api/promocoes/${id}`),
     },
 };
 
