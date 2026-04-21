@@ -39,9 +39,11 @@ document.querySelectorAll('.nav-link').forEach(a => {
   const { usuario, is_admin, cargo } = await res.json();
   window._session = { usuario, is_admin, cargo };
 
+  const isOperador = !is_admin && cargo !== 'gerente';
+
   // Esconde abas restritas para operadores
-  if (!is_admin && cargo !== 'gerente') {
-    ['procedimentos', 'financeiro', 'promocoes'].forEach(p => {
+  if (isOperador) {
+    ['dashboard', 'procedimentos', 'financeiro', 'promocoes'].forEach(p => {
       const link = document.querySelector(`[data-page="${p}"]`);
       if (link) link.style.display = 'none';
     });
@@ -82,6 +84,6 @@ document.querySelectorAll('.nav-link').forEach(a => {
     nav.appendChild(btnLogout);
   }
 
-  // Inicia no dashboard
-  navegar('dashboard');
+  // Operadores vão direto para o calendário; demais cargos para o dashboard
+  navegar(isOperador ? 'calendario' : 'dashboard');
 })();
