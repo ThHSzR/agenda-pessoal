@@ -8,8 +8,26 @@ const { getDb } = require('./server/database');
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
+// ── SSE Log em tempo real ─────────────────────────────────────
+const sseClients = new Set();
+
+function sseLog(nivel, ...args) {
+  const msg = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
+  const linha = `[${new Date().toLocaleTimeString('pt-BR')}] [${nivel.toUpperCase()}] ${msg}`;
+  console.log(linha);
+  for (const res of sseClients) {
+    try { res.write(`data: ${JSON.stringify({ nivel, msg: linha })}\n\n`); } catch (_) {}
+  }
+}
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'src')));
+
+// Middleware de log de todas as requisições API
+app.use('/api', (req, _res, next) => {
+  sseLog('info', `→ ${req.method} ${req.path}`, req.method !== 'GET' ? req.body : '');
+  next();
+});
 
 app.use(session({
   secret: process.env.SESSION_SECRET || 'dev-secret-troque-em-producao',
@@ -36,6 +54,17 @@ function authGerente(req, res, next) {
   if (req.session?.logado && (req.session?.is_admin || req.session?.cargo === 'gerente')) return next();
   res.status(403).json({ erro: 'Acesso negado' });
 }
+
+// ── SSE endpoint ──────────────────────────────────────────────
+app.get('/api/logs/stream', authAdmin, (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+  res.write(`data: ${JSON.stringify({ nivel: 'info', msg: '✅ Log conectado.' })}\n\n`);
+  sseClients.add(res);
+  req.on('close', () => sseClients.delete(res));
+});
 
 // ── AUTH ──────────────────────────────────────────────────────
 app.post('/api/login', loginLimiter, (req, res) => {
@@ -206,53 +235,6 @@ app.get('/api/agendamentos', auth, (req, res) => {
 });
 
 app.get('/api/agendamentos/:id', auth, (req, res) => {
-  const row = getDb().prepare(`
-    SELECT a.*, c.nome as cliente_nome, c.telefone as cliente_telefone,
-           p.nome as procedimento_nome, p.tem_variantes,
-           v.nome as variante_nome
-    FROM agendamentos a
-    JOIN clientes c ON c.id = a.cliente_id
-    LEFT JOIN procedimentos p ON p.id = a.procedimento_id
-    LEFT JOIN procedimento_variantes v ON v.id = a.variante_id
-    WHERE a.id = ?
-  `).get(req.params.id);
-  row ? res.json(row) : res.status(404).json({ erro: 'Não encontrado' });
-});
-
-app.post('/api/agendamentos', auth, (req, res) => {
-  const db = getDb(), d = req.body;
-
-  // Pega primeiro proc do array novo, ou fallback para campo legado
-  const procs = Array.isArray(d.procs) && d.procs.length > 0 ? d.procs : null;
-  const procId    = procs ? procs[0].procId    : (d.procedimento_id || null);
-  const varId     = procs ? procs[0].varianteId : (d.variante_id    || null);
-  const valor     = procs
-    ? procs.reduce((s, p) => s + (Number(p.valor) || 0), 0)
-    : (d.valor_cobrado || 0);
-  const valorFinal = d.valor_cobrado != null ? Number(d.valor_cobrado) : valor;
-
-  if (d.id) {
-    db.prepare('UPDATE agendamentos SET cliente_id=?,procedimento_id=?,variante_id=?,data_hora=?,status=?,valor_cobrado=?,observacoes=? WHERE id=?')
-      .run(d.cliente_id, procId, varId, d.data_hora, d.status, valorFinal, d.observacoes, d.id);
-    res.json({ id: d.id });
-  } else {
-    const r = db.prepare('INSERT INTO agendamentos (cliente_id,procedimento_id,variante_id,data_hora,status,valor_cobrado,observacoes) VALUES (?,?,?,?,?,?,?)')
-      .run(d.cliente_id, procId, varId, d.data_hora, d.status||'agendado', valorFinal, d.observacoes);
-    res.json({ id: r.lastInsertRowid });
-  }
-});
-
-app.delete('/api/agendamentos/:id', auth, (req, res) => {
-  getDb().prepare('DELETE FROM agendamentos WHERE id=?').run(req.params.id);
-  res.json({ ok: true });
-});
-
-app.patch('/api/agendamentos/:id/status', auth, (req, res) => {
-  getDb().prepare('UPDATE agendamentos SET status=? WHERE id=?').run(req.body.status, req.params.id);
-  res.json({ ok: true });
-});
-
-app.get('/api/agendamentos/:id', auth, (req, res) => {
   const db = getDb();
   const agend = db.prepare(`
     SELECT a.*, c.nome as cliente_nome, c.telefone as cliente_telefone
@@ -277,9 +259,7 @@ app.post('/api/agendamentos', auth, (req, res) => {
   const db = getDb(), d = req.body;
   const procs = Array.isArray(d.procs) && d.procs.length > 0 ? d.procs : [];
   const somaValor   = procs.reduce((s, p) => s + (Number(p.valor)       || 0), 0);
-  const somaDuracao = procs.reduce((s, p) => s + (Number(p.duracao_min) || 0), 0);
 
-  // gerente/admin pode sobrescrever; operador usa a soma
   const isGerente = req.session?.is_admin || req.session?.cargo === 'gerente';
   const valorFinal = (isGerente && d.valor_cobrado != null)
     ? Number(d.valor_cobrado)
@@ -378,6 +358,92 @@ app.post('/api/cliente-variantes', auth, (req, res) => {
   const ins = db.prepare('INSERT OR IGNORE INTO cliente_variantes_interesse (cliente_id, variante_id) VALUES (?,?)');
   (varianteIds||[]).forEach(vid => ins.run(clienteId, vid));
   res.json({ ok: true });
+});
+
+// ── PROMOÇÕES ─────────────────────────────────────────────────
+app.get('/api/promocoes', authGerente, (req, res) => {
+  try {
+    const db = getDb();
+    const promos = db.prepare('SELECT * FROM promocoes ORDER BY criado_em DESC').all();
+    promos.forEach(p => {
+      p.regras = db.prepare('SELECT * FROM promocao_regras WHERE promocao_id=?').all(p.id);
+    });
+    res.json(promos);
+  } catch (e) {
+    sseLog('error', 'GET /api/promocoes:', e.message);
+    res.status(500).json({ erro: e.message });
+  }
+});
+
+app.get('/api/promocoes/:id', authGerente, (req, res) => {
+  try {
+    const db = getDb();
+    const promo = db.prepare('SELECT * FROM promocoes WHERE id=?').get(req.params.id);
+    if (!promo) return res.status(404).json({ erro: 'Não encontrado' });
+    promo.regras = db.prepare('SELECT * FROM promocao_regras WHERE promocao_id=?').all(promo.id);
+    res.json(promo);
+  } catch (e) {
+    sseLog('error', 'GET /api/promocoes/:id:', e.message);
+    res.status(500).json({ erro: e.message });
+  }
+});
+
+app.post('/api/promocoes', authGerente, (req, res) => {
+  try {
+    sseLog('info', 'POST /api/promocoes body:', req.body);
+    const db = getDb(), d = req.body;
+
+    if (!d.nome || !d.nome.trim())
+      return res.status(400).json({ erro: 'Nome é obrigatório' });
+
+    const campos = ['nome','tipo_desconto','valor_desconto','modo_itens',
+                    'quantidade_min','ativa','data_inicio','data_fim',
+                    'dias_semana','limite_usos'];
+
+    let promoId;
+    if (d.id) {
+      db.prepare(`UPDATE promocoes SET ${campos.map(c=>`${c}=?`).join(',')} WHERE id=?`)
+        .run(...campos.map(c => d[c] !== undefined ? d[c] : null), d.id);
+      promoId = d.id;
+      sseLog('info', 'Promoção atualizada id:', promoId);
+    } else {
+      const r = db.prepare(`INSERT INTO promocoes (${campos.join(',')}) VALUES (${campos.map(()=>'?').join(',')})`)
+        .run(...campos.map(c => d[c] !== undefined ? d[c] : null));
+      promoId = r.lastInsertRowid;
+      sseLog('info', 'Promoção criada id:', promoId);
+    }
+
+    // Regras
+    db.prepare('DELETE FROM promocao_regras WHERE promocao_id=?').run(promoId);
+    const insRegra = db.prepare(
+      'INSERT INTO promocao_regras (promocao_id, tipo_regra, procedimento_id, variante_id, quantidade) VALUES (?,?,?,?,?)'
+    );
+    const regras = Array.isArray(d.regras) ? d.regras : [];
+    const insAll = db.transaction(() => {
+      regras.forEach(r => {
+        insRegra.run(promoId, r.tipo_regra, r.procedimento_id || null,
+                     r.variante_id || null, r.quantidade || 1);
+      });
+    });
+    insAll();
+
+    sseLog('info', `✅ Promoção ${promoId} salva com ${regras.length} regra(s).`);
+    res.json({ id: promoId });
+  } catch (e) {
+    sseLog('error', 'POST /api/promocoes ERRO:', e.message, e.stack);
+    res.status(500).json({ erro: e.message });
+  }
+});
+
+app.delete('/api/promocoes/:id', authGerente, (req, res) => {
+  try {
+    getDb().prepare('DELETE FROM promocoes WHERE id=?').run(req.params.id);
+    sseLog('info', 'Promoção excluída id:', req.params.id);
+    res.json({ ok: true });
+  } catch (e) {
+    sseLog('error', 'DELETE /api/promocoes/:id:', e.message);
+    res.status(500).json({ erro: e.message });
+  }
 });
 
 // ── SPA FALLBACK ──────────────────────────────────────────────

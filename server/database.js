@@ -98,6 +98,32 @@ function initTables() {
       FOREIGN KEY (cliente_id)      REFERENCES clientes(id) ON DELETE CASCADE,
       FOREIGN KEY (procedimento_id) REFERENCES procedimentos(id)
     );
+    CREATE TABLE IF NOT EXISTS promocoes (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      nome            TEXT NOT NULL,
+      tipo_desconto   TEXT NOT NULL DEFAULT 'percentual',
+      valor_desconto  REAL NOT NULL DEFAULT 0,
+      modo_itens      TEXT NOT NULL DEFAULT 'lista_fechada',
+      quantidade_min  INTEGER,
+      ativa           INTEGER NOT NULL DEFAULT 1,
+      data_inicio     TEXT,
+      data_fim        TEXT,
+      dias_semana     TEXT DEFAULT '[]',
+      limite_usos     INTEGER,
+      usos            INTEGER NOT NULL DEFAULT 0,
+      criado_em       TEXT DEFAULT (datetime('now','localtime'))
+    );
+    CREATE TABLE IF NOT EXISTS promocao_regras (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      promocao_id     INTEGER NOT NULL,
+      tipo_regra      TEXT NOT NULL,
+      procedimento_id INTEGER,
+      variante_id     INTEGER,
+      quantidade      INTEGER NOT NULL DEFAULT 1,
+      FOREIGN KEY (promocao_id)     REFERENCES promocoes(id) ON DELETE CASCADE,
+      FOREIGN KEY (procedimento_id) REFERENCES procedimentos(id),
+      FOREIGN KEY (variante_id)     REFERENCES procedimento_variantes(id)
+    );
   `);
 
   // ── migrações usuarios ──────────────────────────────────────────
@@ -156,11 +182,8 @@ function initTables() {
   const colsAgend = db.prepare('PRAGMA table_info(agendamentos)').all().map(c => c.name);
   if (!colsAgend.includes('variante_id'))
     db.exec('ALTER TABLE agendamentos ADD COLUMN variante_id INTEGER');
-  // torna procedimento_id opicional (era NOT NULL antes)
-  // SQLite não suporta DROP/ALTER constraint, mas a tabela já foi recriada sem NOT NULL acima
 
   // ── migra dados legados para agendamento_procedimentos ───────────────
-  // Agendamentos que têm procedimento_id mas ainda não tem entrada em agendamento_procedimentos
   const legados = db.prepare(`
     SELECT a.id, a.procedimento_id, a.variante_id, a.valor_cobrado,
            COALESCE(v.duracao_min, p.duracao_min, 0) as duracao_min
