@@ -192,6 +192,33 @@ function initTables() {
   if (!colsAgend.includes('variante_id'))
     db.exec('ALTER TABLE agendamentos ADD COLUMN variante_id INTEGER');
 
+  // Migração: tornar procedimento_id nullable em bancos antigos
+  // SQLite não suporta ALTER COLUMN, então recriamos a tabela se necessário
+  const procIdCol = db.prepare('PRAGMA table_info(agendamentos)').all().find(c => c.name === 'procedimento_id');
+  if (procIdCol && procIdCol.notnull === 1) {
+    console.log('⚙️ Migrando tabela agendamentos: tornando procedimento_id nullable...');
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS agendamentos_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cliente_id INTEGER NOT NULL,
+        procedimento_id INTEGER,
+        variante_id INTEGER,
+        data_hora TEXT NOT NULL,
+        status TEXT DEFAULT 'agendado',
+        valor_cobrado REAL,
+        observacoes TEXT,
+        criado_em TEXT DEFAULT (datetime('now','localtime')),
+        FOREIGN KEY (cliente_id)      REFERENCES clientes(id),
+        FOREIGN KEY (procedimento_id) REFERENCES procedimentos(id),
+        FOREIGN KEY (variante_id)     REFERENCES procedimento_variantes(id)
+      );
+      INSERT INTO agendamentos_new SELECT * FROM agendamentos;
+      DROP TABLE agendamentos;
+      ALTER TABLE agendamentos_new RENAME TO agendamentos;
+    `);
+    console.log('✅ Tabela agendamentos migrada com sucesso.');
+  }
+
   // ── migra dados legados para agendamento_procedimentos ───────────────
   const legados = db.prepare(`
     SELECT a.id, a.procedimento_id, a.variante_id, a.valor_cobrado,

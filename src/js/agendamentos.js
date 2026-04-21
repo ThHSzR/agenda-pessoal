@@ -176,7 +176,22 @@ async function _agendRecalcularPromocao() {
     promocao_id:        _agendPromoOverrideId  || null,
   };
 
-  const calc = await window.api.promocoes.calcular(payload);
+  let calc;
+  try {
+    calc = await window.api.promocoes.calcular(payload);
+  } catch (e) {
+    console.warn('Erro ao calcular promoção:', e.message);
+    _agendPromocaoAtual = null;
+    promoBox.innerHTML  = '';
+    _agendRecalcular();
+    // Atualiza valor com subtotal sem promoção
+    const subtotal = itens.reduce((s, it) => s + (parseFloat(it.valor) || 0), 0);
+    const campoValor = document.getElementById('agend-valor');
+    if (!campoValor.dataset.manualOverride || campoValor.dataset.manualOverride !== '1') {
+      campoValor.value = subtotal.toFixed(2);
+    }
+    return;
+  }
   _agendPromocaoAtual   = calc.promocao_aplicada;
 
   let html = '';
@@ -402,27 +417,32 @@ async function salvarAgendamento() {
 
   await _agendRecalcularPromocao();
 
-  await window.api.agendamentos.salvar({
-    id:               document.getElementById('agend-id').value || null,
-    cliente_id:       parseInt(clienteId),
-    data_hora:        toDbDatetime(dataHora),
-    status:           document.getElementById('agend-status').value,
-    valor_cobrado:    parseFloat(document.getElementById('agend-valor').value) || 0,
-    observacoes:      document.getElementById('agend-obs').value,
-    promocao_aplicada: _agendPromocaoAtual,
-    procs: procsValidos.map(p => ({
-      procedimento_id: p.procId,
-      variante_id:     p.varianteId || null,
-      valor:           p.valor,
-      duracao_min:     p.duracao,
-    })),
-  });
+  try {
+    await window.api.agendamentos.salvar({
+      id:               document.getElementById('agend-id').value || null,
+      cliente_id:       parseInt(clienteId),
+      data_hora:        toDbDatetime(dataHora),
+      status:           document.getElementById('agend-status').value,
+      valor_cobrado:    parseFloat(document.getElementById('agend-valor').value) || 0,
+      observacoes:      document.getElementById('agend-obs').value,
+      promocao_aplicada: _agendPromocaoAtual,
+      procs: procsValidos.map(p => ({
+        procedimento_id: p.procId,
+        variante_id:     p.varianteId || null,
+        valor:           p.valor,
+        duracao_min:     p.duracao,
+      })),
+    });
 
-  fecharModal('modal-agendamento');
-  toast('Agendamento salvo!', 'success');
-  const paginaAtiva = document.querySelector('.page:not(.hidden)');
-  if (paginaAtiva?.id === 'page-agendamentos') renderAgendamentos();
-  if (paginaAtiva?.id === 'page-calendario')   renderCalendario();
+    fecharModal('modal-agendamento');
+    toast('Agendamento salvo!', 'success');
+    const paginaAtiva = document.querySelector('.page:not(.hidden)');
+    if (paginaAtiva?.id === 'page-agendamentos') renderAgendamentos();
+    if (paginaAtiva?.id === 'page-calendario')   renderCalendario();
+  } catch (e) {
+    toast('Erro ao salvar: ' + e.message, 'error');
+    console.error('Erro ao salvar agendamento:', e);
+  }
 }
 
 async function excluirAgend(id) {
