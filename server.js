@@ -283,6 +283,8 @@ app.post('/api/agendamentos', auth, (req, res) => {
   }
 
   db.prepare('DELETE FROM agendamento_procedimentos WHERE agendamento_id=?').run(agendId);
+  db.prepare('DELETE FROM promocao_usos WHERE agendamento_id=?').run(agendId);
+
   const insAP = db.prepare(`
     INSERT INTO agendamento_procedimentos (agendamento_id, procedimento_id, variante_id, valor, duracao_min)
     VALUES (?,?,?,?,?)
@@ -290,6 +292,11 @@ app.post('/api/agendamentos', auth, (req, res) => {
   const insAll = db.transaction(() => {
     procs.forEach(p => insAP.run(agendId, p.procedimento_id, p.variante_id || null,
                                   Number(p.valor) || 0, Number(p.duracao_min) || 0));
+    // Persiste uso de promoção se houver
+    if (d.promocao_aplicada?.id) {
+      db.prepare('INSERT INTO promocao_usos (promocao_id, agendamento_id, desconto_aplicado) VALUES (?,?,?)')
+        .run(d.promocao_aplicada.id, agendId, d.promocao_aplicada.desconto || 0);
+    }
   });
   insAll();
 
@@ -359,6 +366,134 @@ app.post('/api/cliente-variantes', auth, (req, res) => {
   (varianteIds||[]).forEach(vid => ins.run(clienteId, vid));
   res.json({ ok: true });
 });
+
+// ── PROMOÇÕES — helpers de cálculo ──────────────────────────────
+function _estaNaVigencia(prom, dataHora) {
+  const data = String(dataHora).slice(0, 10);
+  if (prom.data_inicio && data < prom.data_inicio) return false;
+  if (prom.data_fim    && data > prom.data_fim)    return false;
+  if (prom.dias_semana) {
+    try {
+      const dias = JSON.parse(prom.dias_semana);
+      if (Array.isArray(dias) && dias.length > 0) {
+        const dow = new Date(String(dataHora).replace(' ', 'T')).getDay();
+        if (!dias.includes(dow)) return false;
+      }
+    } catch (_) {}
+  }
+  return true;
+}
+
+function _subtotalItens(itens) {
+  return itens.reduce((s, it) => s + (parseFloat(it.valor) || 0), 0);
+}
+
+function _clonarItens(itens) {
+  return itens.map((it, idx) => ({ ...it, _idx: idx, _usado: false }));
+}
+
+function _matchRegraEmItem(regra, item) {
+  if (regra.tipo_regra === 'categoria_laser') return Number(item.is_laser) === 1;
+  if (regra.tipo_regra === 'procedimento')    return Number(item.procedimento_id) === Number(regra.procedimento_id);
+  if (regra.tipo_regra === 'variante')        return Number(item.variante_id) === Number(regra.variante_id);
+  return false;
+}
+
+function _consumirListaFechada(regras, pool) {
+  const usados = [];
+  for (const regra of regras) {
+    let faltam = Number(regra.quantidade || 1);
+    for (const item of pool) {
+      if (item._usado) continue;
+      if (_matchRegraEmItem(regra, item)) {
+        item._usado = true;
+        usados.push(item);
+        faltam--;
+        if (faltam <= 0) break;
+      }
+    }
+    if (faltam > 0) return null;
+  }
+  return usados;
+}
+
+function _consumirMinimo(regras, quantMin, pool) {
+  const elegiveis = pool.filter(it => !it._usado && regras.some(r => _matchRegraEmItem(r, it)));
+  if (elegiveis.length < quantMin) return null;
+  const usados = elegiveis.slice(0, quantMin);
+  usados.forEach(it => { it._usado = true; });
+  return usados;
+}
+
+function _calcDesconto(tipo, valorDesc, subtotalCasado) {
+  const vd  = parseFloat(valorDesc)    || 0;
+  const sub = parseFloat(subtotalCasado) || 0;
+  if (tipo === 'fixo' || tipo === 'valor_fixo') return Math.max(0, sub - vd);
+  if (tipo === 'reais')      return Math.max(0, vd);
+  if (tipo === 'percentual') return Math.max(0, sub * vd / 100);
+  return 0;
+}
+
+function _tentarPromo(db, prom, itens, dataHora) {
+  if (!_estaNaVigencia(prom, dataHora)) return null;
+  const usos = db.prepare('SELECT COUNT(*) as n FROM promocao_usos WHERE promocao_id=?').get(prom.id).n;
+  if (prom.limite_usos != null && usos >= Number(prom.limite_usos)) return null;
+
+  const regras = db.prepare('SELECT * FROM promocao_regras WHERE promocao_id=? ORDER BY id').all(prom.id);
+  const pool   = _clonarItens(itens);
+
+  const usados = prom.modo_itens === 'lista_fechada'
+    ? _consumirListaFechada(regras, pool)
+    : _consumirMinimo(regras, Number(prom.quantidade_min || 1), pool);
+
+  if (!usados || usados.length === 0) return null;
+
+  const subtotalCasado = _subtotalItens(usados);
+  const desconto       = _calcDesconto(prom.tipo_desconto, prom.valor_desconto, subtotalCasado);
+  const valorAplicado  = Math.max(0, subtotalCasado - desconto);
+  return { promocao: prom, usados, subtotal_casado: subtotalCasado, valor_aplicado: valorAplicado, desconto };
+}
+
+function _buscarPromoAuto(db, itens, dataHora, ignorarId = null) {
+  const proms = db.prepare('SELECT * FROM promocoes WHERE ativa=1 ORDER BY id').all();
+  for (const prom of proms) {
+    if (ignorarId && Number(prom.id) === Number(ignorarId)) continue;
+    const res = _tentarPromo(db, prom, itens, dataHora);
+    if (res) return res;
+  }
+  return null;
+}
+
+function _enriquecerItens(db, itensRaw) {
+  return itensRaw.map(it => {
+    if (it.variante_id) {
+      const row = db.prepare(`
+        SELECT pv.id as variante_id, pv.valor, pv.duracao_min,
+               p.id as procedimento_id, p.nome as procedimento_nome, p.is_laser,
+               pv.nome as variante_nome
+        FROM procedimento_variantes pv
+        JOIN procedimentos p ON p.id = pv.procedimento_id
+        WHERE pv.id = ?
+      `).get(it.variante_id);
+      if (row) return {
+        procedimento_id: row.procedimento_id, procedimento_nome: row.procedimento_nome,
+        variante_id: row.variante_id, variante_nome: row.variante_nome,
+        valor: Number(it.valor ?? row.valor ?? 0),
+        duracao_min: Number(it.duracao_min ?? row.duracao_min ?? 0),
+        is_laser: Number(row.is_laser || 0),
+      };
+    }
+    const proc = db.prepare('SELECT * FROM procedimentos WHERE id=?').get(it.procedimento_id);
+    return {
+      procedimento_id: it.procedimento_id,
+      procedimento_nome: proc?.nome ?? '',
+      variante_id: null, variante_nome: null,
+      valor: Number(it.valor ?? proc?.valor ?? 0),
+      duracao_min: Number(it.duracao_min ?? proc?.duracao_min ?? 0),
+      is_laser: Number(proc?.is_laser || 0),
+    };
+  });
+}
 
 // ── PROMOÇÕES ─────────────────────────────────────────────────
 app.get('/api/promocoes', authGerente, (req, res) => {
@@ -438,6 +573,51 @@ app.post('/api/promocoes', authGerente, (req, res) => {
     res.json({ id: promoId });
   } catch (e) {
     sseLog('error', 'POST /api/promocoes ERRO:', e.message, e.stack);
+    res.status(500).json({ erro: e.message });
+  }
+});
+
+app.post('/api/promocoes/calcular', auth, (req, res) => {
+  try {
+    const db      = getDb();
+    const payload = req.body;
+    const itens   = _enriquecerItens(db, payload.itens || []);
+    const subtotal = _subtotalItens(itens);
+
+    let aplicada = null;
+
+    if (payload.promocao_id) {
+      const prom = db.prepare('SELECT * FROM promocoes WHERE id=? AND ativa=1').get(payload.promocao_id);
+      if (prom) aplicada = _tentarPromo(db, prom, itens, payload.data_hora);
+    } else if (payload.aplicar_automatico !== 0) {
+      aplicada = _buscarPromoAuto(db, itens, payload.data_hora);
+    }
+
+    const alternativa = aplicada
+      ? _buscarPromoAuto(db, itens, payload.data_hora, aplicada.promocao.id)
+      : null;
+
+    const total = aplicada ? subtotal - aplicada.desconto : subtotal;
+
+    res.json({
+      subtotal,
+      total,
+      promocao_aplicada: aplicada ? {
+        id: aplicada.promocao.id,
+        nome: aplicada.promocao.nome,
+        tipo_desconto: aplicada.promocao.tipo_desconto,
+        valor_desconto: aplicada.promocao.valor_desconto,
+        subtotal_casado: aplicada.subtotal_casado,
+        valor_aplicado: aplicada.valor_aplicado,
+        desconto: aplicada.desconto,
+        usados: aplicada.usados,
+      } : null,
+      aviso_outra_promocao: alternativa
+        ? `⚠️ Outra promoção também era aplicável: "${alternativa.promocao.nome}". Apenas uma promoção por agendamento.`
+        : null,
+    });
+  } catch (e) {
+    sseLog('error', 'POST /api/promocoes/calcular ERRO:', e.message);
     res.status(500).json({ erro: e.message });
   }
 });

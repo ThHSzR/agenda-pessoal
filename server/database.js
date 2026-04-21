@@ -124,6 +124,15 @@ function initTables() {
       FOREIGN KEY (procedimento_id) REFERENCES procedimentos(id),
       FOREIGN KEY (variante_id)     REFERENCES procedimento_variantes(id)
     );
+    CREATE TABLE IF NOT EXISTS promocao_usos (
+      id                INTEGER PRIMARY KEY AUTOINCREMENT,
+      promocao_id       INTEGER NOT NULL,
+      agendamento_id    INTEGER NOT NULL,
+      desconto_aplicado REAL NOT NULL DEFAULT 0,
+      criado_em         TEXT DEFAULT (datetime('now','localtime')),
+      FOREIGN KEY (promocao_id)    REFERENCES promocoes(id) ON DELETE CASCADE,
+      FOREIGN KEY (agendamento_id) REFERENCES agendamentos(id) ON DELETE CASCADE
+    );
   `);
 
   // ── migrações usuarios ──────────────────────────────────────────
@@ -196,6 +205,24 @@ function initTables() {
         WHERE ap.agendamento_id = a.id
       )
   `).all();
+
+  // ── migração promocao_usos (bancos antigos sem a tabela) ─────────
+  try {
+    db.prepare('SELECT 1 FROM promocao_usos LIMIT 1').get();
+  } catch (_) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS promocao_usos (
+        id                INTEGER PRIMARY KEY AUTOINCREMENT,
+        promocao_id       INTEGER NOT NULL,
+        agendamento_id    INTEGER NOT NULL,
+        desconto_aplicado REAL NOT NULL DEFAULT 0,
+        criado_em         TEXT DEFAULT (datetime('now','localtime')),
+        FOREIGN KEY (promocao_id)    REFERENCES promocoes(id) ON DELETE CASCADE,
+        FOREIGN KEY (agendamento_id) REFERENCES agendamentos(id) ON DELETE CASCADE
+      )
+    `);
+    console.log('✅ Tabela promocao_usos criada via migration.');
+  }
 
   if (legados.length > 0) {
     const ins = db.prepare(`

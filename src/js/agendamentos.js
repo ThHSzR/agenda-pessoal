@@ -183,18 +183,18 @@ async function _agendRecalcularPromocao() {
 
   if (calc.promocao_aplicada) {
     html += `
-      <div style="background:var(--color-success-highlight);border:1px solid var(--color-success);border-radius:var(--radius-md);padding:10px 14px;margin-top:8px;font-size:var(--text-sm)">
+      <div style="background:#f0fdf4;border:1px solid var(--success);border-radius:var(--radius);padding:10px 14px;margin-top:8px;font-size:13px">
         🏷️ <strong>${calc.promocao_aplicada.nome}</strong><br>
-        <span style="color:var(--color-text-muted)">
+        <span style="color:var(--text-muted)">
           Subtotal do combo: ${fmtMoeda(calc.promocao_aplicada.subtotal_casado)} →
-          desconto: <strong style="color:var(--color-success)">−${fmtMoeda(calc.promocao_aplicada.desconto)}</strong>
+          desconto: <strong style="color:var(--success)">−${fmtMoeda(calc.promocao_aplicada.desconto)}</strong>
         </span>
       </div>`;
   }
 
   if (calc.aviso_outra_promocao) {
     html += `
-      <div style="background:var(--color-warning-highlight);border:1px solid var(--color-warning);border-radius:var(--radius-md);padding:10px 14px;margin-top:6px;font-size:var(--text-sm)">
+      <div style="background:#fff8e1;border:1px solid var(--warning);border-radius:var(--radius);padding:10px 14px;margin-top:6px;font-size:13px">
         ${calc.aviso_outra_promocao}
       </div>`;
   }
@@ -221,7 +221,7 @@ async function _agendAdicionarProc(procIdSel = null, varianteIdSel = null) {
 
   const linha = document.createElement('div');
   linha.id    = `agend-proc-linha-${idx}`;
-  linha.style = 'display:flex;gap:8px;align-items:center;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-md);padding:8px';
+  linha.style = 'display:flex;gap:8px;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:8px';
 
   const placeholderOpt = procIdSel === null
     ? `<option value="" disabled selected>— Selecione um procedimento —</option>`

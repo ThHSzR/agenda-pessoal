@@ -66,6 +66,7 @@ const api = {
         buscar: (id) => api._fetch('GET', `/api/promocoes/${id}`),
         salvar: (d) => api._fetch('POST', '/api/promocoes', d),
         excluir: (id) => api._fetch('DELETE', `/api/promocoes/${id}`),
+        calcular: (payload) => api._fetch('POST', '/api/promocoes/calcular', payload),
     },
 };
 
