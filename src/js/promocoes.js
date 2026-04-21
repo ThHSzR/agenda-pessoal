@@ -1,7 +1,7 @@
 // ─── Estado interno ───────────────────────────────────────────
 let _promoLista  = [];
 let _promoRegras = [];
-let _promoProcsCached = null; // cache de procedimentos para o formulário
+let _promoProcsCached = null;
 
 // ─── Render principal ─────────────────────────────────────────
 async function renderPromocoes() {
@@ -55,9 +55,7 @@ function _renderTbodyPromocoes() {
       ? '<span style="color:var(--success);font-weight:600">✅ Ativa</span>'
       : '<span style="color:var(--text-muted)">⏸ Inativa</span>';
     const vigencia = [p.data_inicio, p.data_fim].filter(Boolean).join(' → ') || '—';
-    const desconto = p.tipo_desconto === 'percentual'
-      ? `${p.valor_desconto}%`
-      : fmtMoeda(p.valor_desconto);
+    const desconto = _fmtTipoDesconto(p.tipo_desconto, p.valor_desconto);
 
     return `
     <tr>
@@ -73,6 +71,14 @@ function _renderTbodyPromocoes() {
   }).join('');
 }
 
+// Formata o tipo de desconto para exibição na tabela
+function _fmtTipoDesconto(tipo, valor) {
+  if (tipo === 'percentual')  return `${valor}% de desconto`;
+  if (tipo === 'reais')       return `− ${fmtMoeda(valor)}`;
+  if (tipo === 'valor_fixo')  return `Valor fixo: ${fmtMoeda(valor)}`;
+  return fmtMoeda(valor);
+}
+
 // ─── Carregar procedimentos no select do formulário ───────────
 async function _promoCarregarProcsNoSelect() {
   if (!_promoProcsCached) {
@@ -85,21 +91,20 @@ async function _promoCarregarProcsNoSelect() {
       `<option value="${p.id}" data-tem-variantes="${p.tem_variantes}">${p.nome}</option>`
     ).join('');
 
-  // Reseta variante
   const selVar = document.getElementById('promo-regra-var');
-  if (selVar) selVar.innerHTML = '<option value="">— Nenhuma —</option>';
+  if (selVar) selVar.innerHTML = '<option value="">— Nenhuma / Qualquer variante —</option>';
 }
 
 async function _promoOnProcChange() {
-  const sel   = document.getElementById('promo-regra-proc');
+  const sel    = document.getElementById('promo-regra-proc');
   const selVar = document.getElementById('promo-regra-var');
   if (!sel || !selVar) return;
 
-  const opt      = sel.options[sel.selectedIndex];
-  const procId   = parseInt(sel.value) || null;
-  const temVar   = opt?.dataset?.temVariantes === '1';
+  const opt    = sel.options[sel.selectedIndex];
+  const procId = parseInt(sel.value) || null;
+  const temVar = opt?.dataset?.temVariantes === '1';
 
-  selVar.innerHTML = '<option value="">— Nenhuma —</option>';
+  selVar.innerHTML = '<option value="">— Nenhuma / Qualquer variante —</option>';
 
   if (procId && temVar) {
     const vars = await window.api.variantes.listar(procId);
@@ -115,7 +120,7 @@ async function _promoOnProcChange() {
 // ─── Abrir modal ──────────────────────────────────────────────
 async function abrirNovaPromocao() {
   _promoResetModal();
-  _promoProcsCached = null; // força recarregar
+  _promoProcsCached = null;
   await _promoCarregarProcsNoSelect();
   document.getElementById('modal-promo-title').textContent = 'Nova Promoção';
   abrirModal('modal-promocao');
@@ -141,6 +146,9 @@ async function editarPromocao(id) {
   document.getElementById('promo-data-fim').value           = p.data_fim    || '';
   document.getElementById('promo-limite-usos').value        = p.limite_usos ?? '';
 
+  // Atualiza label do campo de valor conforme tipo
+  _promoAtualizarLabelValor();
+
   // Dias da semana
   const dias = typeof p.dias_semana === 'string'
     ? JSON.parse(p.dias_semana || '[]')
@@ -149,7 +157,7 @@ async function editarPromocao(id) {
     cb.checked = dias.includes(parseInt(cb.value));
   });
 
-  // Regras — enriquece com nome para exibição
+  // Regras
   _promoRegras = Array.isArray(p.regras) ? p.regras.map(r => ({ ...r })) : [];
   await _promoEnriquecerRegras();
   _renderTbodyRegras();
@@ -157,7 +165,25 @@ async function editarPromocao(id) {
   abrirModal('modal-promocao');
 }
 
-// Enriquece as regras já salvas com nomes para exibição
+// Atualiza o label do campo valor conforme o tipo selecionado
+function _promoAtualizarLabelValor() {
+  const tipo  = document.getElementById('promo-tipo-desconto')?.value;
+  const label = document.getElementById('promo-label-valor');
+  const input = document.getElementById('promo-valor-desconto');
+  if (!label || !input) return;
+  if (tipo === 'percentual') {
+    label.textContent  = 'Percentual de Desconto (%)';
+    input.placeholder  = 'Ex: 10 (= 10%)';
+  } else if (tipo === 'reais') {
+    label.textContent  = 'Valor a Subtrair (R$)';
+    input.placeholder  = 'Ex: 50,00';
+  } else if (tipo === 'valor_fixo') {
+    label.textContent  = 'Valor Fixo Cobrado (R$)';
+    input.placeholder  = 'Ex: 200,00';
+  }
+}
+
+// Enriquece regras salvas com nomes legíveis
 async function _promoEnriquecerRegras() {
   for (const r of _promoRegras) {
     if (r._proc_nome) continue;
@@ -193,6 +219,7 @@ function _promoResetModal() {
   document.getElementById('promo-data-fim').value        = '';
   document.getElementById('promo-limite-usos').value     = '';
   document.querySelectorAll('#promo-dias-semana input[type=checkbox]').forEach(cb => cb.checked = false);
+  _promoAtualizarLabelValor();
   _promoRegras = [];
   _renderTbodyRegras();
 }
@@ -211,7 +238,7 @@ function _renderTbodyRegras() {
   tbody.innerHTML = _promoRegras.map((r, i) => `
     <tr>
       <td style="font-size:13px">${r._proc_nome || '—'}</td>
-      <td style="font-size:13px;color:var(--text-muted)">${r._var_nome || '<em style="color:var(--text-muted)">Qualquer variante</em>'}</td>
+      <td style="font-size:13px;color:var(--text-muted)">${r._var_nome || '<em>Qualquer variante</em>'}</td>
       <td style="text-align:center;font-size:13px">${r.quantidade ?? 1}</td>
       <td><button class="btn btn-danger btn-sm" onclick="_promoRemoverRegra(${i})">✕</button></td>
     </tr>`).join('');
@@ -240,9 +267,8 @@ async function _promoAdicionarRegra() {
 
   _renderTbodyRegras();
 
-  // Reseta selects de regra
   selProc.value = '';
-  selVar.innerHTML = '<option value="">— Nenhuma —</option>';
+  selVar.innerHTML = '<option value="">— Nenhuma / Qualquer variante —</option>';
   document.getElementById('promo-regra-qtd').value = '1';
 }
 
@@ -276,16 +302,25 @@ async function salvarPromocao() {
     regras:         _promoRegras.map(({ _proc_nome, _var_nome, ...r }) => r),
   };
 
-  await window.api.promocoes.salvar(payload);
-  fecharModal('modal-promocao');
-  toast('Promoção salva!', 'success');
-  await _carregarPromocoes();
+  try {
+    await window.api.promocoes.salvar(payload);
+    fecharModal('modal-promocao');
+    toast('Promoção salva!', 'success');
+    await _carregarPromocoes();
+  } catch (e) {
+    toast('Erro ao salvar promoção.', 'error');
+    console.error(e);
+  }
 }
 
 // ─── Excluir ──────────────────────────────────────────────────
 async function excluirPromocao(id) {
   if (!confirm('Excluir esta promoção?')) return;
-  await window.api.promocoes.excluir(id);
-  toast('Promoção excluída.', 'info');
-  await _carregarPromocoes();
+  try {
+    await window.api.promocoes.excluir(id);
+    toast('Promoção excluída.', 'info');
+    await _carregarPromocoes();
+  } catch (e) {
+    toast('Erro ao excluir.', 'error');
+  }
 }
