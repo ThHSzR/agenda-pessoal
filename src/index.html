@@ -21,6 +21,7 @@
         <a class="nav-link" data-page="clientes"><span class="icon">👤</span> Clientes</a>
         <a class="nav-link" data-page="procedimentos"><span class="icon">💆</span> Procedimentos</a>
         <a class="nav-link" data-page="financeiro"><span class="icon">💰</span> Financeiro</a>
+        <a class="nav-link" data-page="promocoes"><span class="icon">🏷️</span> Promoções</a>
       </nav>
     </aside>
 
@@ -30,6 +31,7 @@
       <div id="page-clientes" class="page hidden"></div>
       <div id="page-procedimentos" class="page hidden"></div>
       <div id="page-financeiro" class="page hidden"></div>
+      <div id="page-promocoes" class="page hidden"></div>
     </main>
   </div>
 
@@ -143,6 +145,145 @@
       </button>
       <button class="btn btn-secondary" onclick="fecharModal('modal-agendamento')">Cancelar</button>
       <button class="btn btn-primary" onclick="salvarAgendamento()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     MODAL — PROMOÇÃO
+══════════════════════════════════════════════════════ -->
+<div id="modal-promocao" class="modal-overlay hidden">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h2 id="modal-promo-title">Nova Promoção</h2>
+      <button class="modal-close" onclick="fecharModal('modal-promocao')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="promo-id"/>
+
+      <!-- Nome + Ativa -->
+      <div class="form-row">
+        <div class="form-group" style="flex:3">
+          <label>Nome *</label>
+          <input type="text" id="promo-nome" placeholder="Ex: Combo Verão"/>
+        </div>
+        <div class="form-group" style="flex:1;display:flex;align-items:center;gap:8px;padding-top:22px">
+          <input type="checkbox" id="promo-ativa" style="width:auto"/>
+          <label for="promo-ativa" style="margin:0;cursor:pointer;text-transform:none;font-size:13px;letter-spacing:0">Ativa</label>
+        </div>
+      </div>
+
+      <!-- Tipo desconto + Valor -->
+      <div class="form-row">
+        <div class="form-group">
+          <label>Tipo de Desconto</label>
+          <select id="promo-tipo-desconto">
+            <option value="percentual">% Percentual</option>
+            <option value="reais">R$ em Reais (valor fixo a subtrair)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Valor do Desconto</label>
+          <input type="number" id="promo-valor-desconto" step="0.01" min="0" placeholder="Ex: 10"/>
+        </div>
+      </div>
+
+      <!-- Modo + Qtd mínima + Limite -->
+      <div class="form-row">
+        <div class="form-group">
+          <label>Modo de Aplicação</label>
+          <select id="promo-modo-itens">
+            <option value="lista_fechada">Combo fechado — todos os itens das regras</option>
+            <option value="minimo">Mínimo — basta atingir a quantidade mínima</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label title="Só usado no modo Mínimo: quantos itens precisam estar no agendamento para a promoção ser aplicada">
+            Itens mínimos no agendamento ❓
+          </label>
+          <input type="number" id="promo-qtd-min" min="1" placeholder="Ex: 2 (somente modo Mínimo)"/>
+        </div>
+        <div class="form-group">
+          <label>Limite de Usos</label>
+          <input type="number" id="promo-limite-usos" min="1" placeholder="Ilimitado"/>
+        </div>
+      </div>
+
+      <!-- Vigência -->
+      <div class="form-row">
+        <div class="form-group">
+          <label>Data Início</label>
+          <input type="date" id="promo-data-inicio"/>
+        </div>
+        <div class="form-group">
+          <label>Data Fim</label>
+          <input type="date" id="promo-data-fim"/>
+        </div>
+      </div>
+
+      <!-- Dias da semana -->
+      <div class="form-group">
+        <label>Dias da Semana <span style="font-weight:400;text-transform:none;letter-spacing:0">(vazio = todos os dias)</span></label>
+        <div id="promo-dias-semana" style="display:flex;flex-wrap:wrap;gap:10px;margin-top:6px">
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-weight:400;text-transform:none;letter-spacing:0;font-size:13px"><input type="checkbox" value="0" style="width:auto"/> Dom</label>
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-weight:400;text-transform:none;letter-spacing:0;font-size:13px"><input type="checkbox" value="1" style="width:auto"/> Seg</label>
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-weight:400;text-transform:none;letter-spacing:0;font-size:13px"><input type="checkbox" value="2" style="width:auto"/> Ter</label>
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-weight:400;text-transform:none;letter-spacing:0;font-size:13px"><input type="checkbox" value="3" style="width:auto"/> Qua</label>
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-weight:400;text-transform:none;letter-spacing:0;font-size:13px"><input type="checkbox" value="4" style="width:auto"/> Qui</label>
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-weight:400;text-transform:none;letter-spacing:0;font-size:13px"><input type="checkbox" value="5" style="width:auto"/> Sex</label>
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-weight:400;text-transform:none;letter-spacing:0;font-size:13px"><input type="checkbox" value="6" style="width:auto"/> Sáb</label>
+        </div>
+      </div>
+
+      <!-- Regras de itens -->
+      <div class="form-group" style="margin-top:4px">
+        <label style="font-weight:700">Regras de Itens</label>
+        <p style="font-size:12px;color:var(--text-muted);margin-bottom:8px;text-transform:none;letter-spacing:0;font-weight:400">
+          Defina quais procedimentos/variantes fazem parte desta promoção.
+        </p>
+        <table style="margin-bottom:10px">
+          <thead>
+            <tr>
+              <th>Procedimento</th>
+              <th>Variante</th>
+              <th style="text-align:center;width:60px">Qtd</th>
+              <th style="width:40px"></th>
+            </tr>
+          </thead>
+          <tbody id="promo-regras-tbody"></tbody>
+        </table>
+
+        <!-- Formulário de nova regra -->
+        <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:12px">
+          <p class="section-label" style="margin-bottom:10px">Adicionar item à regra</p>
+          <div class="form-row" style="align-items:flex-end">
+            <div class="form-group" style="margin-bottom:0">
+              <label>Procedimento</label>
+              <select id="promo-regra-proc" onchange="_promoOnProcChange()">
+                <option value="">— Selecione —</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom:0" id="promo-regra-var-group">
+              <label>Variante <span style="font-weight:400;text-transform:none;letter-spacing:0">(se houver)</span></label>
+              <select id="promo-regra-var">
+                <option value="">— Nenhuma —</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom:0;max-width:90px">
+              <label>Quantidade</label>
+              <input type="number" id="promo-regra-qtd" value="1" min="1"/>
+            </div>
+            <div style="padding-bottom:0">
+              <button class="btn btn-secondary btn-sm" onclick="_promoAdicionarRegra()">+ Adicionar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="fecharModal('modal-promocao')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarPromocao()">💾 Salvar</button>
     </div>
   </div>
 </div>
@@ -350,7 +491,6 @@
             <input type="text" id="cli-sol-quando" placeholder="Quando?" class="inline-input" />
           </div>
 
-          <!-- Fitzpatrick — aparece condicionalmente se algum proc com is_laser=1 estiver marcado -->
           <div id="cli-fitz-section" class="hidden">
             <div class="form-group" style="margin-top:20px">
               <label>Classificação Fitzpatrick — Como sua pele reage ao sol?</label>
@@ -474,6 +614,7 @@
   <script src="./js/procedimentos.js"></script>
   <script src="./js/agendamentos.js"></script>
   <script src="./js/financeiro.js"></script>
+  <script src="./js/promocoes.js"></script>
   <!-- adicione ANTES de app.js -->
   <script src="./js/usuarios.js"></script>
   <script src="./js/app.js"></script>

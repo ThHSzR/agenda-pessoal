@@ -1,17 +1,18 @@
 const paginas = {
-  calendario: renderCalendario,
+  calendario:   renderCalendario,
   agendamentos: renderAgendamentos,
-  clientes: renderClientes,
+  clientes:     renderClientes,
   procedimentos: renderProcedimentos,
-  financeiro: renderFinanceiro,
-  usuarios: renderUsuarios,
+  financeiro:   renderFinanceiro,
+  promocoes:    renderPromocoes,
+  usuarios:     renderUsuarios,
 };
 
 let paginaAtual = 'calendario';
 
 function navegar(pagina) {
   const pageEl = document.getElementById(`page-${pagina}`);
-  const navEl = document.querySelector(`[data-page="${pagina}"]`);
+  const navEl  = document.querySelector(`[data-page="${pagina}"]`);
   if (!pageEl || !navEl) return;
 
   document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
@@ -34,10 +35,8 @@ document.querySelectorAll('.nav-link').forEach(a => {
   const res = await fetch('/api/me', { credentials: 'same-origin' });
   if (!res.ok) { window.location.href = '/login.html'; return; }
 
-  // ← desestrutura cargo também
   const { usuario, is_admin, cargo } = await res.json();
   window._session = { usuario, is_admin, cargo };
-
 
   // Esconde aba Procedimentos e Financeiro para operadores
   if (!is_admin && cargo !== 'gerente') {
@@ -45,6 +44,12 @@ document.querySelectorAll('.nav-link').forEach(a => {
     if (linkProc) linkProc.style.display = 'none';
     const linkFin = document.querySelector('[data-page="financeiro"]');
     if (linkFin) linkFin.style.display = 'none';
+  }
+
+  // Esconde aba Promoções para operadores (só admin e gerente veem)
+  if (!is_admin && cargo !== 'gerente') {
+    const linkPromo = document.querySelector('[data-page="promocoes"]');
+    if (linkPromo) linkPromo.style.display = 'none';
   }
 
   const nav = document.querySelector('#sidebar nav');
@@ -56,7 +61,7 @@ document.querySelectorAll('.nav-link').forEach(a => {
     // Botão Usuários — só para admin
     if (is_admin) {
       if (!document.getElementById('page-usuarios')) {
-        document.getElementById('page-financeiro').insertAdjacentHTML('afterend',
+        document.getElementById('page-promocoes').insertAdjacentHTML('afterend',
           '<div id="page-usuarios" class="page hidden"></div>'
         );
       }
