@@ -21,6 +21,13 @@ function sseLog(nivel, ...args) {
   }
 }
 
+function logAtividade(db, userId, acao, entidade, entidadeId, detalhes) {
+  try {
+    db.prepare('INSERT INTO log_atividades (usuario_id, acao, entidade, entidade_id, detalhes) VALUES (?,?,?,?,?)')
+      .run(userId, acao, entidade, entidadeId, detalhes || null);
+  } catch (_) {}
+}
+
 app.use(express.json({ limit: '2mb' }));
 app.use(express.static(path.join(__dirname, 'src')));
 
@@ -92,6 +99,7 @@ app.post('/api/login', loginLimiter, (req, res) => {
       req.session.usuario  = user.usuario;
       req.session.is_admin = !!user.is_admin;
       req.session.cargo    = user.cargo || 'operador';
+      logAtividade(db, user.id, 'login', 'usuarios', user.id, null);
       res.json({ ok: true, is_admin: !!user.is_admin, cargo: req.session.cargo });
     });
   } catch (e) {
@@ -130,6 +138,7 @@ app.post('/api/usuarios', authAdmin, (req, res) => {
     const cargoFinal = is_admin ? 'admin' : (cargo === 'gerente' ? 'gerente' : 'operador');
     const r = db.prepare('INSERT INTO usuarios (usuario, senha, is_admin, cargo) VALUES (?,?,?,?)')
       .run(usuario, bcrypt.hashSync(senha, 12), is_admin ? 1 : 0, cargoFinal);
+    logAtividade(db, req.session.userId, 'criar_usuario', 'usuarios', r.lastInsertRowid, usuario);
     res.json({ id: r.lastInsertRowid });
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
@@ -204,9 +213,11 @@ app.post('/api/clientes', auth, (req, res) => {
     const vals = CLIENTE_FIELDS.map(f => d[f] !== undefined ? d[f] : null);
     if (d.id) {
       db.prepare(`UPDATE clientes SET ${CLIENTE_FIELDS.map(f=>`${f}=?`).join(',')} WHERE id=?`).run(...vals, d.id);
+      logAtividade(db, req.session.userId, 'editar_cliente', 'clientes', d.id, d.nome);
       res.json({ id: d.id });
     } else {
       const r = db.prepare(`INSERT INTO clientes (${CLIENTE_FIELDS.join(',')}) VALUES (${CLIENTE_FIELDS.map(()=>'?').join(',')})`).run(...vals);
+      logAtividade(db, req.session.userId, 'criar_cliente', 'clientes', r.lastInsertRowid, d.nome);
       res.json({ id: r.lastInsertRowid });
     }
   } catch (e) { res.status(500).json({ erro: e.message }); }
@@ -214,7 +225,9 @@ app.post('/api/clientes', auth, (req, res) => {
 
 app.delete('/api/clientes/:id', auth, (req, res) => {
   try {
-    getDb().prepare('DELETE FROM clientes WHERE id=?').run(req.params.id);
+    const db = getDb();
+    db.prepare('DELETE FROM clientes WHERE id=?').run(req.params.id);
+    logAtividade(db, req.session.userId, 'excluir_cliente', 'clientes', req.params.id, null);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
@@ -303,7 +316,6 @@ app.get('/api/agendamentos', auth, (req, res) => {
 
     const agendamentos = db.prepare(sql).all(...params);
 
-    // Enriquece cada agendamento com procedimentos de agendamento_procedimentos
     const getProcs = db.prepare(`
       SELECT ap.*, p.nome AS procedimento_nome, p.duracao_min AS proc_duracao,
              v.nome AS variante_nome, v.duracao_min AS variante_duracao
@@ -356,7 +368,6 @@ app.get('/api/agendamentos/:id', auth, (req, res) => {
       ORDER BY ap.id
     `).all(req.params.id);
 
-    // Retorna uso de promoção se houver
     agend.promocao_uso = db.prepare(`
       SELECT pu.*, pr.nome as promocao_nome
       FROM promocao_usos pu
@@ -381,6 +392,24 @@ app.post('/api/agendamentos', auth, (req, res) => {
     const valorFinal = (isGerente && d.valor_cobrado != null)
       ? Number(d.valor_cobrado)
       : somaValor;
+
+    // Verificar conflito de horário
+    if (d.data_hora && procs.length > 0) {
+      const duracaoTotal = procs.reduce((s, p) => s + (Number(p.duracao_min) || 0), 0);
+      const inicio = d.data_hora;
+      const fimDate = new Date(inicio.replace(' ', 'T'));
+      fimDate.setMinutes(fimDate.getMinutes() + duracaoTotal);
+      const fim = fimDate.toISOString().slice(0, 16).replace('T', ' ') + ':00';
+
+      // Verificar bloqueios
+      const bloqueio = db.prepare(`
+        SELECT titulo FROM bloqueios_horario
+        WHERE data_hora_inicio < ? AND data_hora_fim > ?
+      `).get(fim, inicio);
+      if (bloqueio) {
+        return res.status(409).json({ erro: `Horário bloqueado: ${bloqueio.titulo}` });
+      }
+    }
 
     let agendId;
     if (d.id) {
@@ -409,7 +438,6 @@ app.post('/api/agendamentos', auth, (req, res) => {
     const insAll = db.transaction(() => {
       procs.forEach(p => insAP.run(agendId, p.procedimento_id, p.variante_id || null,
                                     Number(p.valor) || 0, Number(p.duracao_min) || 0));
-      // Persiste uso de promoção se houver
       if (d.promocao_aplicada?.id) {
         db.prepare('INSERT INTO promocao_usos (promocao_id, agendamento_id, desconto_aplicado) VALUES (?,?,?)')
           .run(d.promocao_aplicada.id, agendId, d.promocao_aplicada.desconto || 0);
@@ -417,6 +445,8 @@ app.post('/api/agendamentos', auth, (req, res) => {
     });
     insAll();
 
+    logAtividade(db, req.session.userId, d.id ? 'editar_agendamento' : 'criar_agendamento',
+                 'agendamentos', agendId, `${procs.length} proc(s), R$ ${valorFinal}`);
     sseLog('info', `Agendamento ${agendId} salvo com ${procs.length} proc(s).`);
     res.json({ id: agendId });
   } catch (e) {
@@ -427,14 +457,18 @@ app.post('/api/agendamentos', auth, (req, res) => {
 
 app.delete('/api/agendamentos/:id', auth, (req, res) => {
   try {
-    getDb().prepare('DELETE FROM agendamentos WHERE id=?').run(req.params.id);
+    const db = getDb();
+    db.prepare('DELETE FROM agendamentos WHERE id=?').run(req.params.id);
+    logAtividade(db, req.session.userId, 'excluir_agendamento', 'agendamentos', req.params.id, null);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 
 app.patch('/api/agendamentos/:id/status', auth, (req, res) => {
   try {
-    getDb().prepare('UPDATE agendamentos SET status=? WHERE id=?').run(req.body.status, req.params.id);
+    const db = getDb();
+    db.prepare('UPDATE agendamentos SET status=? WHERE id=?').run(req.body.status, req.params.id);
+    logAtividade(db, req.session.userId, 'status_agendamento', 'agendamentos', req.params.id, req.body.status);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
@@ -584,15 +618,6 @@ function _consumirMinimo(regras, quantMin, pool) {
   return usados;
 }
 
-/**
- * Calcula o desconto aplicado.
- * Retorna o VALOR DO DESCONTO (quanto é subtraído do subtotal).
- *
- * Semântica:
- * - percentual: desconto = subtotal * (valorDesc / 100)
- * - reais:      desconto = valorDesc (subtrai esse valor do subtotal)
- * - fixo/valor_fixo: o valor final cobrado é valorDesc, então desconto = subtotal - valorDesc
- */
 function _calcDesconto(tipo, valorDesc, subtotalCasado) {
   const vd  = parseFloat(valorDesc)     || 0;
   const sub = parseFloat(subtotalCasado) || 0;
@@ -668,7 +693,7 @@ function _enriquecerItens(db, itensRaw) {
 // ══════════════════════════════════════════════════════════════
 //  PROMOÇÕES — CRUD
 // ══════════════════════════════════════════════════════════════
-app.get('/api/promocoes', authGerente, (req, res) => {
+app.get('/api/promocoes', auth, (req, res) => {
   try {
     const db = getDb();
     const promos = db.prepare('SELECT * FROM promocoes ORDER BY criado_em DESC').all();
@@ -688,7 +713,7 @@ app.get('/api/promocoes', authGerente, (req, res) => {
   }
 });
 
-app.get('/api/promocoes/:id', authGerente, (req, res) => {
+app.get('/api/promocoes/:id', auth, (req, res) => {
   try {
     const db = getDb();
     const promo = db.prepare('SELECT * FROM promocoes WHERE id=?').get(req.params.id);
@@ -768,6 +793,8 @@ app.post('/api/promocoes/calcular', auth, (req, res) => {
     const itens   = _enriquecerItens(db, payload.itens || []);
     const subtotal = _subtotalItens(itens);
 
+    sseLog('info', 'Calculando promoção para', itens.length, 'itens, subtotal:', subtotal);
+
     let aplicada = null;
 
     if (payload.promocao_id) {
@@ -782,6 +809,8 @@ app.post('/api/promocoes/calcular', auth, (req, res) => {
       : null;
 
     const total = aplicada ? subtotal - aplicada.desconto : subtotal;
+
+    sseLog('info', 'Promoção calculada:', aplicada ? `"${aplicada.promocao.nome}" desconto=${aplicada.desconto}` : 'nenhuma');
 
     res.json({
       subtotal,
@@ -818,12 +847,73 @@ app.delete('/api/promocoes/:id', authGerente, (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════
+//  BLOQUEIOS DE HORÁRIO
+// ══════════════════════════════════════════════════════════════
+app.get('/api/bloqueios', authGerente, (req, res) => {
+  try {
+    const db = getDb();
+    const { data_inicio, data_fim } = req.query;
+    let sql = 'SELECT * FROM bloqueios_horario';
+    const params = [];
+    if (data_inicio && data_fim) {
+      sql += ' WHERE data_hora_inicio <= ? AND data_hora_fim >= ?';
+      params.push(data_fim, data_inicio);
+    }
+    sql += ' ORDER BY data_hora_inicio';
+    res.json(db.prepare(sql).all(...params));
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
+app.post('/api/bloqueios', authGerente, (req, res) => {
+  try {
+    const db = getDb(), d = req.body;
+    if (!d.data_hora_inicio || !d.data_hora_fim)
+      return res.status(400).json({ erro: 'Datas de início e fim são obrigatórias' });
+    if (d.id) {
+      db.prepare('UPDATE bloqueios_horario SET titulo=?, data_hora_inicio=?, data_hora_fim=?, motivo=?, recorrente=? WHERE id=?')
+        .run(d.titulo || 'Bloqueado', d.data_hora_inicio, d.data_hora_fim, d.motivo || null, d.recorrente || 0, d.id);
+      res.json({ id: d.id });
+    } else {
+      const r = db.prepare('INSERT INTO bloqueios_horario (titulo, data_hora_inicio, data_hora_fim, motivo, recorrente) VALUES (?,?,?,?,?)')
+        .run(d.titulo || 'Bloqueado', d.data_hora_inicio, d.data_hora_fim, d.motivo || null, d.recorrente || 0);
+      res.json({ id: r.lastInsertRowid });
+    }
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
+app.delete('/api/bloqueios/:id', authGerente, (req, res) => {
+  try {
+    getDb().prepare('DELETE FROM bloqueios_horario WHERE id=?').run(req.params.id);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
+// ══════════════════════════════════════════════════════════════
+//  LOG DE ATIVIDADES
+// ══════════════════════════════════════════════════════════════
+app.get('/api/logs', authAdmin, (req, res) => {
+  try {
+    const db = getDb();
+    const { limite } = req.query;
+    const lim = Math.min(parseInt(limite) || 100, 500);
+    res.json(db.prepare(`
+      SELECT l.*, u.usuario
+      FROM log_atividades l
+      LEFT JOIN usuarios u ON u.id = l.usuario_id
+      ORDER BY l.criado_em DESC
+      LIMIT ?
+    `).all(lim));
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
+// ══════════════════════════════════════════════════════════════
 //  DASHBOARD / ESTATÍSTICAS
 // ══════════════════════════════════════════════════════════════
 app.get('/api/dashboard', auth, (req, res) => {
   try {
     const db = getDb();
     const hojeStr = new Date().toISOString().slice(0, 10);
+    const mesAtual = hojeStr.slice(0, 7);
 
     const agendHoje = db.prepare(`
       SELECT COUNT(*) as n FROM agendamentos WHERE date(data_hora) = ?
@@ -834,12 +924,94 @@ app.get('/api/dashboard', auth, (req, res) => {
     const recebidoMes = db.prepare(`
       SELECT COALESCE(SUM(valor_cobrado), 0) as total
       FROM agendamentos
-      WHERE status='concluido' AND strftime('%Y-%m', data_hora) = strftime('%Y-%m', 'now', 'localtime')
-    `).get().total;
+      WHERE status='concluido' AND strftime('%Y-%m', data_hora) = ?
+    `).get(mesAtual).total;
 
     const promosAtivas = db.prepare('SELECT COUNT(*) as n FROM promocoes WHERE ativa=1').get().n;
 
-    res.json({ agendamentos_hoje: agendHoje, total_clientes: totalClientes, recebido_mes: recebidoMes, promos_ativas: promosAtivas });
+    const agendSemana = db.prepare(`
+      SELECT COUNT(*) as n FROM agendamentos
+      WHERE date(data_hora) BETWEEN date('now','localtime','-6 days') AND date('now','localtime')
+    `).get().n;
+
+    const taxaConclusao = db.prepare(`
+      SELECT
+        CASE WHEN COUNT(*) = 0 THEN 0
+        ELSE ROUND(100.0 * SUM(CASE WHEN status='concluido' THEN 1 ELSE 0 END) / COUNT(*), 1)
+        END as taxa
+      FROM agendamentos
+      WHERE strftime('%Y-%m', data_hora) = ?
+    `).get(mesAtual).taxa;
+
+    const proximosAgend = db.prepare(`
+      SELECT a.id, a.data_hora, a.status, a.valor_cobrado, c.nome as cliente_nome
+      FROM agendamentos a
+      JOIN clientes c ON c.id = a.cliente_id
+      WHERE date(a.data_hora) = ? AND a.status IN ('agendado')
+      ORDER BY a.data_hora
+      LIMIT 10
+    `).all(hojeStr);
+
+    const topProcedimentos = db.prepare(`
+      SELECT p.nome, COUNT(*) as total
+      FROM agendamento_procedimentos ap
+      JOIN procedimentos p ON p.id = ap.procedimento_id
+      JOIN agendamentos a ON a.id = ap.agendamento_id
+      WHERE strftime('%Y-%m', a.data_hora) = ?
+      GROUP BY p.id
+      ORDER BY total DESC
+      LIMIT 5
+    `).all(mesAtual);
+
+    res.json({
+      agendamentos_hoje: agendHoje,
+      agendamentos_semana: agendSemana,
+      total_clientes: totalClientes,
+      recebido_mes: recebidoMes,
+      promos_ativas: promosAtivas,
+      taxa_conclusao: taxaConclusao,
+      proximos_agendamentos: proximosAgend,
+      top_procedimentos: topProcedimentos,
+    });
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
+// ══════════════════════════════════════════════════════════════
+//  RELATÓRIOS
+// ══════════════════════════════════════════════════════════════
+app.get('/api/relatorios/faturamento-mensal', authGerente, (req, res) => {
+  try {
+    const db = getDb();
+    const { meses } = req.query;
+    const qtd = Math.min(parseInt(meses) || 6, 24);
+    const dados = db.prepare(`
+      SELECT strftime('%Y-%m', data_hora) as mes,
+             COUNT(*) as total_agendamentos,
+             SUM(CASE WHEN status='concluido' THEN valor_cobrado ELSE 0 END) as faturado,
+             SUM(CASE WHEN status='cancelado' THEN 1 ELSE 0 END) as cancelados
+      FROM agendamentos
+      WHERE data_hora >= date('now','localtime','-' || ? || ' months')
+      GROUP BY mes
+      ORDER BY mes
+    `).all(qtd);
+    res.json(dados);
+  } catch (e) { res.status(500).json({ erro: e.message }); }
+});
+
+app.get('/api/relatorios/clientes-frequentes', authGerente, (req, res) => {
+  try {
+    const db = getDb();
+    const dados = db.prepare(`
+      SELECT c.id, c.nome, c.telefone, COUNT(a.id) as total_agendamentos,
+             SUM(CASE WHEN a.status='concluido' THEN a.valor_cobrado ELSE 0 END) as total_gasto,
+             MAX(a.data_hora) as ultimo_agendamento
+      FROM clientes c
+      JOIN agendamentos a ON a.cliente_id = c.id
+      GROUP BY c.id
+      ORDER BY total_agendamentos DESC
+      LIMIT 20
+    `).all();
+    res.json(dados);
   } catch (e) { res.status(500).json({ erro: e.message }); }
 });
 

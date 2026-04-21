@@ -290,7 +290,7 @@ async function _agendOnProcChange(idx, varianteIdSel = null) {
   }
 }
 
-function _agendOnVarChange(idx) {
+async function _agendOnVarChange(idx) {
   const varSel  = document.getElementById(`agend-var-sel-${idx}`);
   const procSel = document.getElementById(`agend-proc-sel-${idx}`);
   const vOpt    = varSel.options[varSel.selectedIndex];
@@ -300,14 +300,14 @@ function _agendOnVarChange(idx) {
   const duracao = parseInt(vOpt?.dataset.duracao)   || 0;
   _agendProcsModal[idx] = { procId, varianteId, valor, duracao };
   document.getElementById(`agend-proc-info-${idx}`).textContent = `${duracao}min · ${fmtMoeda(valor)}`;
-  _agendRecalcularPromocao();
+  await _agendRecalcularPromocao();
 }
 
-function _agendRemoverProc(idx) {
+async function _agendRemoverProc(idx) {
   const linha = document.getElementById(`agend-proc-linha-${idx}`);
   if (linha) linha.remove();
   _agendProcsModal[idx] = null;
-  _agendRecalcularPromocao();
+  await _agendRecalcularPromocao();
 }
 
 function _agendWhatsApp() {

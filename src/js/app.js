@@ -6,7 +6,10 @@ const paginas = {
   procedimentos: renderProcedimentos,
   financeiro:    renderFinanceiro,
   promocoes:     renderPromocoes,
+  bloqueios:     renderBloqueios,
+  relatorios:    renderRelatorios,
   usuarios:      renderUsuarios,
+  logs:          renderLogs,
 };
 
 let paginaAtual = 'dashboard';
@@ -31,6 +34,27 @@ document.querySelectorAll('.nav-link').forEach(a => {
   a.addEventListener('click', () => navegar(a.dataset.page));
 });
 
+// Helper: cria um link de navegação na sidebar
+function _criarNavLink(nav, pagina, icone, label, opts = {}) {
+  // Cria a page div se não existir
+  if (!document.getElementById(`page-${pagina}`)) {
+    const main = document.getElementById('content');
+    const div = document.createElement('div');
+    div.id = `page-${pagina}`;
+    div.className = 'page hidden';
+    main.appendChild(div);
+  }
+
+  const a = document.createElement('a');
+  a.className = 'nav-link';
+  a.dataset.page = pagina;
+  if (opts.style) a.style = opts.style;
+  a.innerHTML = `<span class="icon">${icone}</span> ${label}`;
+  a.addEventListener('click', () => navegar(pagina));
+  nav.appendChild(a);
+  return a;
+}
+
 // Verificação de sessão + montagem dinâmica da sidebar
 (async () => {
   const res = await fetch('/api/me', { credentials: 'same-origin' });
@@ -40,6 +64,7 @@ document.querySelectorAll('.nav-link').forEach(a => {
   window._session = { usuario, is_admin, cargo };
 
   const isOperador = !is_admin && cargo !== 'gerente';
+  const isGerente  = is_admin || cargo === 'gerente';
 
   // Esconde abas restritas para operadores
   if (isOperador) {
@@ -51,28 +76,43 @@ document.querySelectorAll('.nav-link').forEach(a => {
 
   const nav = document.querySelector('#sidebar nav');
   if (nav) {
+    // Separador antes das abas extras
     const sep = document.createElement('hr');
-    sep.style = 'border:none;border-top:1px solid rgba(255,255,255,0.2);margin:8px 0';
+    sep.style = 'border:none;border-top:1px solid rgba(255,255,255,0.15);margin:12px 0';
     nav.appendChild(sep);
 
-    // Botão Usuários — só para admin
-    if (is_admin) {
-      if (!document.getElementById('page-usuarios')) {
-        const main = document.getElementById('content');
-        const div = document.createElement('div');
-        div.id = 'page-usuarios';
-        div.className = 'page hidden';
-        main.appendChild(div);
-      }
-      const btnAdmin = document.createElement('a');
-      btnAdmin.className = 'nav-link';
-      btnAdmin.dataset.page = 'usuarios';
-      btnAdmin.innerHTML = '<span class="icon">⚙️</span> Usuários';
-      btnAdmin.addEventListener('click', () => navegar('usuarios'));
-      nav.appendChild(btnAdmin);
+    // Bloqueios de horário — gerentes e admin
+    if (isGerente) {
+      _criarNavLink(nav, 'bloqueios', '🚫', 'Bloqueios');
     }
 
-    // Botão Sair — todos os cargos veem
+    // Relatórios — gerentes e admin
+    if (isGerente) {
+      _criarNavLink(nav, 'relatorios', '📈', 'Relatórios');
+    }
+
+    // Usuários — só admin
+    if (is_admin) {
+      _criarNavLink(nav, 'usuarios', '⚙️', 'Usuários');
+    }
+
+    // Log de atividades — só admin
+    if (is_admin) {
+      _criarNavLink(nav, 'logs', '📝', 'Logs');
+    }
+
+    // Separador antes do logout
+    const sep2 = document.createElement('hr');
+    sep2.style = 'border:none;border-top:1px solid rgba(255,255,255,0.15);margin:12px 0';
+    nav.appendChild(sep2);
+
+    // Info do usuário logado
+    const userInfo = document.createElement('div');
+    userInfo.style = 'padding:8px 16px;font-size:11px;color:rgba(255,255,255,0.6)';
+    userInfo.innerHTML = `👤 ${usuario} <span style="opacity:0.5">(${cargo || 'admin'})</span>`;
+    nav.appendChild(userInfo);
+
+    // Botão Sair
     const btnLogout = document.createElement('a');
     btnLogout.className = 'nav-link';
     btnLogout.style = 'color:rgba(255,200,200,0.9);cursor:pointer';

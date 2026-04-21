@@ -9,6 +9,8 @@ const api = {
       const err = await res.json().catch(() => ({ erro: `HTTP ${res.status}` }));
       throw new Error(err.erro || `HTTP ${res.status}`);
     }
+    // Backup endpoint retorna blob, não JSON
+    if (url === '/api/backup') return res;
     return res.json();
   },
 
@@ -82,6 +84,26 @@ const api = {
     salvar:   (d)       => api._fetch('POST',   '/api/promocoes', d),
     excluir:  (id)      => api._fetch('DELETE',  `/api/promocoes/${id}`),
     calcular: (payload) => api._fetch('POST',   '/api/promocoes/calcular', payload),
+  },
+
+  bloqueios: {
+    listar:  (filtro) => {
+      const p = new URLSearchParams();
+      if (filtro?.data_inicio) p.set('data_inicio', filtro.data_inicio);
+      if (filtro?.data_fim)    p.set('data_fim', filtro.data_fim);
+      return api._fetch('GET', '/api/bloqueios?' + p.toString());
+    },
+    salvar:  (d)  => api._fetch('POST',   '/api/bloqueios', d),
+    excluir: (id) => api._fetch('DELETE',  `/api/bloqueios/${id}`),
+  },
+
+  relatorios: {
+    faturamentoMensal:   (meses) => api._fetch('GET', `/api/relatorios/faturamento-mensal?meses=${meses || 6}`),
+    clientesFrequentes:  (limite) => api._fetch('GET', `/api/relatorios/clientes-frequentes?limite=${limite || 10}`),
+  },
+
+  logs: {
+    listar: (limite) => api._fetch('GET', `/api/logs?limite=${limite || 100}`),
   },
 
   dashboard: {
