@@ -257,7 +257,11 @@ async function _promoAdicionarRegra() {
   const procOpt = selProc.options[selProc.selectedIndex];
   const varOpt  = selVar.options[selVar.selectedIndex];
 
+  // Infere tipo_regra com base na seleção: se há variante → 'variante'; se há proc → 'procedimento'
+  const tipoRegra = varId ? 'variante' : 'procedimento';
+
   _promoRegras.push({
+    tipo_regra:      tipoRegra,
     procedimento_id: procId,
     variante_id:     varId || null,
     quantidade:      qtd,

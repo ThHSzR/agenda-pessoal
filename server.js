@@ -421,7 +421,14 @@ app.post('/api/promocoes', authGerente, (req, res) => {
     const regras = Array.isArray(d.regras) ? d.regras : [];
     const insAll = db.transaction(() => {
       regras.forEach(r => {
-        insRegra.run(promoId, r.tipo_regra, r.procedimento_id || null,
+        // Infere tipo_regra automaticamente se não vier preenchido do frontend
+        let tipo = r.tipo_regra;
+        if (!tipo) {
+          if      (r.variante_id)     tipo = 'variante';
+          else if (r.procedimento_id) tipo = 'procedimento';
+          else                        tipo = 'categoria_laser';
+        }
+        insRegra.run(promoId, tipo, r.procedimento_id || null,
                      r.variante_id || null, r.quantidade || 1);
       });
     });
