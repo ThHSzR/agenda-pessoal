@@ -45,4 +45,11 @@ contextBridge.exposeInMainWorld('api', {
     getInteresse:    (id) => ipcRenderer.invoke('cliente:getVariantesInteresse', id),
     salvarInteresse: (p)  => ipcRenderer.invoke('cliente:salvarVariantesInteresse', p),
   },
+    promocoes: {
+    listar:    ()      => ipcRenderer.invoke('promocoes:listar'),
+    buscar:    (id)    => ipcRenderer.invoke('promocoes:buscar', id),
+    salvar:    (dados) => ipcRenderer.invoke('promocoes:salvar', dados),
+    excluir:   (id)    => ipcRenderer.invoke('promocoes:excluir', id),
+    calcular:  (dados) => ipcRenderer.invoke('promocoes:calcular', dados),
+  },
 });

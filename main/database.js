@@ -98,6 +98,42 @@ function initTables() {
       FOREIGN KEY (cliente_id)      REFERENCES clientes(id) ON DELETE CASCADE,
       FOREIGN KEY (procedimento_id) REFERENCES procedimentos(id)
     );
+    CREATE TABLE IF NOT EXISTS promocoes (
+      id               INTEGER PRIMARY KEY AUTOINCREMENT,
+      nome             TEXT NOT NULL,
+      tipo_desconto    TEXT NOT NULL CHECK (tipo_desconto IN ('fixo','reais','percentual')),
+      valor_desconto   REAL NOT NULL DEFAULT 0,
+      modo_itens       TEXT NOT NULL CHECK (modo_itens IN ('lista_fechada','minimo')),
+      quantidade_min   INTEGER DEFAULT 1,
+      ativa            INTEGER DEFAULT 1,
+      data_inicio      TEXT,
+      data_fim         TEXT,
+      dias_semana      TEXT,
+      limite_usos      INTEGER,
+      criado_em        TEXT DEFAULT (datetime('now','localtime'))
+    );
+
+    CREATE TABLE IF NOT EXISTS promocao_regras (
+      id               INTEGER PRIMARY KEY AUTOINCREMENT,
+      promocao_id      INTEGER NOT NULL,
+      tipo_regra       TEXT NOT NULL CHECK (tipo_regra IN ('variante','procedimento','categoria_laser')),
+      procedimento_id  INTEGER,
+      variante_id      INTEGER,
+      quantidade       INTEGER NOT NULL DEFAULT 1,
+      FOREIGN KEY (promocao_id) REFERENCES promocoes(id) ON DELETE CASCADE,
+      FOREIGN KEY (procedimento_id) REFERENCES procedimentos(id),
+      FOREIGN KEY (variante_id) REFERENCES procedimento_variantes(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS promocao_usos (
+      id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+      promocao_id        INTEGER NOT NULL,
+      agendamento_id     INTEGER NOT NULL,
+      desconto_aplicado  REAL NOT NULL DEFAULT 0,
+      criado_em          TEXT DEFAULT (datetime('now','localtime')),
+      FOREIGN KEY (promocao_id) REFERENCES promocoes(id) ON DELETE CASCADE,
+      FOREIGN KEY (agendamento_id) REFERENCES agendamentos(id) ON DELETE CASCADE
+    );
   `);
 
   // ── migrações usuarios ────────────────────────────────────

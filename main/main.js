@@ -86,18 +86,15 @@ ipc('clientes:salvar', (_, d) => {
   if (d.id) {
     const sets = fields.map(f => `${f}=?`).join(',');
     db.prepare(`UPDATE clientes SET ${sets} WHERE id=?`).run(...vals, d.id);
-    log('INFO', 'clientes:salvar', `UPDATE id=${d.id} nome="${d.nome}"`);
   } else {
     const cols = fields.join(',');
     const phs  = fields.map(() => '?').join(',');
-    const r = db.prepare(`INSERT INTO clientes (${cols}) VALUES (${phs})`).run(...vals);
-    log('INFO', 'clientes:salvar', `INSERT novo id=${r.lastInsertRowid} nome="${d.nome}"`);
+    db.prepare(`INSERT INTO clientes (${cols}) VALUES (${phs})`).run(...vals);
   }
 });
 
 ipc('clientes:excluir', (_, id) => {
   getDb().prepare('DELETE FROM clientes WHERE id = ?').run(id);
-  log('INFO', 'clientes:excluir', `id=${id}`);
 });
 
 // ─── PROCEDIMENTOS ──────────────────────────────────────────
@@ -164,7 +161,6 @@ ipc('agendamentos:listar', (_, filtro) => {
 
   const agendamentos = db.prepare(sql).all(...params);
 
-  // busca os procedimentos de cada agendamento
   const getProcs = db.prepare(`
     SELECT ap.*, p.nome AS procedimento_nome, p.duracao_min AS proc_duracao,
            v.nome AS variante_nome, v.duracao_min AS variante_duracao
@@ -180,9 +176,8 @@ ipc('agendamentos:listar', (_, filtro) => {
     return {
       ...ag,
       procedimentos: procs,
-      // compat: expõe o primeiro proc nos campos legados
-      procedimento_nome: procs[0]?.procedimento_nome ?? '',
-      variante_nome:     procs[0]?.variante_nome     ?? null,
+      procedimento_nome: procs.map(p => p.variante_nome ? `${p.procedimento_nome} (${p.variante_nome})` : p.procedimento_nome).join(', ') || '—',
+      variante_nome:     procs[0]?.variante_nome ?? null,
       duracao_min:       procs.reduce((s, p) => s + (p.variante_duracao ?? p.proc_duracao ?? 0), 0)
     };
   });
@@ -199,7 +194,7 @@ ipc('agendamentos:buscar', (_, id) => {
   if (!ag) return null;
 
   const procs = db.prepare(`
-    SELECT ap.*, p.nome AS procedimento_nome, p.tem_variantes,
+    SELECT ap.*, p.nome AS procedimento_nome, p.tem_variantes, p.is_laser,
            p.duracao_min AS proc_duracao,
            v.nome AS variante_nome, v.duracao_min AS variante_duracao
     FROM agendamento_procedimentos ap
@@ -209,22 +204,30 @@ ipc('agendamentos:buscar', (_, id) => {
     ORDER BY ap.id
   `).all(id);
 
+  const usoPromo = db.prepare(`
+    SELECT pu.*, pr.nome as promocao_nome
+    FROM promocao_usos pu
+    JOIN promocoes pr ON pr.id = pu.promocao_id
+    WHERE pu.agendamento_id = ?
+  `).get(id);
+
   return {
     ...ag,
     procedimentos: procs,
-    procedimento_nome: procs[0]?.procedimento_nome ?? '',
-    variante_nome:     procs[0]?.variante_nome     ?? null,
-    duracao_min:       procs.reduce((s, p) => s + (p.variante_duracao ?? p.proc_duracao ?? 0), 0)
+    procs,
+    procedimento_nome: procs.map(p => p.variante_nome ? `${p.procedimento_nome} (${p.variante_nome})` : p.procedimento_nome).join(', ') || '—',
+    variante_nome:     procs[0]?.variante_nome ?? null,
+    duracao_min:       procs.reduce((s, p) => s + (p.variante_duracao ?? p.proc_duracao ?? 0), 0),
+    promocao_uso:      usoPromo || null,
   };
 });
 
 ipc('agendamentos:salvar', (_, d) => {
   const db = getDb();
-  const procs = Array.isArray(d.procedimentos) && d.insProcs.length > 0
-    ? d.procedimentos
-    : (d.procedimento_id ? [{ procedimento_id: d.procedimento_id, variante_id: d.variante_id ?? null, valor: d.valor_cobrado ?? 0 }] : []);
 
   const salvar = db.transaction(() => {
+    const procs = Array.isArray(d.procs) && d.procs.length > 0 ? d.procs : [];
+
     let agendamentoId;
     if (d.id) {
       db.prepare(`
@@ -237,8 +240,9 @@ ipc('agendamentos:salvar', (_, d) => {
         procs[0]?.procedimento_id ?? null, procs[0]?.variante_id ?? null,
         d.id
       );
-      agendamentoId = d.id;
+      agendamentoId = Number(d.id);
       db.prepare('DELETE FROM agendamento_procedimentos WHERE agendamento_id=?').run(agendamentoId);
+      db.prepare('DELETE FROM promocao_usos WHERE agendamento_id=?').run(agendamentoId);
     } else {
       const r = db.prepare(`
         INSERT INTO agendamentos (cliente_id, data_hora, status, valor_cobrado, observacoes, procedimento_id, variante_id)
@@ -250,7 +254,6 @@ ipc('agendamentos:salvar', (_, d) => {
       agendamentoId = r.lastInsertRowid;
     }
 
-    // insere em agendamento_procedimentos
     const insAP = db.prepare(`
       INSERT INTO agendamento_procedimentos (agendamento_id, procedimento_id, variante_id, valor, duracao_min)
       VALUES (?, ?, ?, ?, ?)
@@ -263,8 +266,15 @@ ipc('agendamentos:salvar', (_, d) => {
     `);
     procs.forEach(p => {
       const row = getDur.get(p.variante_id ?? null, p.procedimento_id);
-      insAP.run(agendamentoId, p.procedimento_id, p.variante_id ?? null, p.valor ?? 0, row?.dur ?? 0);
+      insAP.run(agendamentoId, p.procedimento_id, p.variante_id ?? null, p.valor ?? 0, p.duracao_min ?? row?.dur ?? 0);
     });
+
+    if (d.promocao_aplicada?.id) {
+      db.prepare(`
+        INSERT INTO promocao_usos (promocao_id, agendamento_id, desconto_aplicado)
+        VALUES (?, ?, ?)
+      `).run(d.promocao_aplicada.id, agendamentoId, d.promocao_aplicada.desconto || 0);
+    }
 
     return agendamentoId;
   });
@@ -292,7 +302,7 @@ ipc('financeiro:resumo', (_, { inicio, fim }) =>
 ipc('financeiro:detalhado', (_, { inicio, fim }) => {
   const db = getDb();
   const agendamentos = db.prepare(`
-    SELECT a.data_hora, a.status, a.valor_cobrado, c.nome AS cliente_nome
+    SELECT a.id, a.data_hora, a.status, a.valor_cobrado, c.nome AS cliente_nome
     FROM agendamentos a
     JOIN clientes c ON c.id = a.cliente_id
     WHERE date(a.data_hora) BETWEEN ? AND ?
@@ -307,10 +317,251 @@ ipc('financeiro:detalhado', (_, { inicio, fim }) => {
     ORDER BY ap.id
   `);
 
+  const getPromo = db.prepare(`
+    SELECT pu.desconto_aplicado, pr.nome as promocao_nome
+    FROM promocao_usos pu
+    JOIN promocoes pr ON pr.id = pu.promocao_id
+    WHERE pu.agendamento_id = ?
+  `);
+
   return agendamentos.map(ag => ({
     ...ag,
-    procedimento_nome: getProcs.all(ag.id).map(p => p.procedimento_nome).join(', ') || '—'
+    procedimento_nome: getProcs.all(ag.id).map(p => p.procedimento_nome).join(', ') || '—',
+    promocao: getPromo.get(ag.id) || null,
   }));
+});
+
+// ─── PROMOÇÕES — helpers ─────────────────────────────────────
+function _estaNaVigencia(prom, dataHora) {
+  const data = String(dataHora).slice(0, 10);
+  if (prom.data_inicio && data < prom.data_inicio) return false;
+  if (prom.data_fim    && data > prom.data_fim)    return false;
+  if (prom.dias_semana) {
+    try {
+      const dias = JSON.parse(prom.dias_semana);
+      if (Array.isArray(dias) && dias.length > 0) {
+        const dow = new Date(String(dataHora).replace(' ', 'T')).getDay();
+        if (!dias.includes(dow)) return false;
+      }
+    } catch (_) {}
+  }
+  return true;
+}
+
+function _subtotalItens(itens) {
+  return itens.reduce((s, it) => s + (parseFloat(it.valor) || 0), 0);
+}
+
+function _clonarItens(itens) {
+  return itens.map((it, idx) => ({ ...it, _idx: idx, _usado: false }));
+}
+
+function _matchRegraEmItem(regra, item) {
+  if (regra.tipo_regra === 'categoria_laser') return Number(item.is_laser) === 1;
+  if (regra.tipo_regra === 'procedimento')    return Number(item.procedimento_id) === Number(regra.procedimento_id);
+  if (regra.tipo_regra === 'variante')        return Number(item.variante_id) === Number(regra.variante_id);
+  return false;
+}
+
+function _consumirListaFechada(regras, pool) {
+  const usados = [];
+  for (const regra of regras) {
+    let faltam = Number(regra.quantidade || 1);
+    for (const item of pool) {
+      if (item._usado) continue;
+      if (_matchRegraEmItem(regra, item)) {
+        item._usado = true;
+        usados.push(item);
+        faltam--;
+        if (faltam <= 0) break;
+      }
+    }
+    if (faltam > 0) return null;
+  }
+  return usados;
+}
+
+function _consumirMinimo(regras, quantMin, pool) {
+  const elegiveis = pool.filter(it => !it._usado && regras.some(r => _matchRegraEmItem(r, it)));
+  if (elegiveis.length < quantMin) return null;
+  const usados = elegiveis.slice(0, quantMin);
+  usados.forEach(it => { it._usado = true; });
+  return usados;
+}
+
+function _calcDesconto(tipo, valorDesc, subtotalCasado) {
+  const vd  = parseFloat(valorDesc)    || 0;
+  const sub = parseFloat(subtotalCasado) || 0;
+  if (tipo === 'fixo')        return Math.max(0, vd);
+  if (tipo === 'reais')       return Math.max(0, sub - vd);
+  if (tipo === 'percentual')  return Math.max(0, sub * (1 - vd / 100));
+  return sub;
+}
+
+function _tentarPromo(db, prom, itens, dataHora) {
+  if (!_estaNaVigencia(prom, dataHora)) return null;
+  const usos = db.prepare('SELECT COUNT(*) as n FROM promocao_usos WHERE promocao_id=?').get(prom.id).n;
+  if (prom.limite_usos != null && usos >= Number(prom.limite_usos)) return null;
+
+  const regras = db.prepare('SELECT * FROM promocao_regras WHERE promocao_id=? ORDER BY id').all(prom.id);
+  const pool   = _clonarItens(itens);
+
+  const usados = prom.modo_itens === 'lista_fechada'
+    ? _consumirListaFechada(regras, pool)
+    : _consumirMinimo(regras, Number(prom.quantidade_min || 1), pool);
+
+  if (!usados || usados.length === 0) return null;
+
+  const subtotalCasado = _subtotalItens(usados);
+  const valorAplicado  = _calcDesconto(prom.tipo_desconto, prom.valor_desconto, subtotalCasado);
+  const desconto       = Math.max(0, subtotalCasado - valorAplicado);
+  return { promocao: prom, usados, subtotal_casado: subtotalCasado, valor_aplicado: valorAplicado, desconto };
+}
+
+function _buscarPromoAuto(db, itens, dataHora, ignorarId = null) {
+  const proms = db.prepare('SELECT * FROM promocoes WHERE ativa=1 ORDER BY id').all();
+  for (const prom of proms) {
+    if (ignorarId && Number(prom.id) === Number(ignorarId)) continue;
+    const res = _tentarPromo(db, prom, itens, dataHora);
+    if (res) return res;
+  }
+  return null;
+}
+
+function _enriquecerItens(db, itensRaw) {
+  return itensRaw.map(it => {
+    if (it.variante_id) {
+      const row = db.prepare(`
+        SELECT pv.id as variante_id, pv.valor, pv.duracao_min,
+               p.id as procedimento_id, p.nome as procedimento_nome, p.is_laser,
+               pv.nome as variante_nome
+        FROM procedimento_variantes pv
+        JOIN procedimentos p ON p.id = pv.procedimento_id
+        WHERE pv.id = ?
+      `).get(it.variante_id);
+      if (row) return {
+        procedimento_id: row.procedimento_id, procedimento_nome: row.procedimento_nome,
+        variante_id: row.variante_id, variante_nome: row.variante_nome,
+        valor: Number(it.valor ?? row.valor ?? 0),
+        duracao_min: Number(it.duracao_min ?? row.duracao_min ?? 0),
+        is_laser: Number(row.is_laser || 0),
+      };
+    }
+    const proc = db.prepare('SELECT * FROM procedimentos WHERE id=?').get(it.procedimento_id);
+    return {
+      procedimento_id: it.procedimento_id,
+      procedimento_nome: proc?.nome ?? '',
+      variante_id: null, variante_nome: null,
+      valor: Number(it.valor ?? proc?.valor ?? 0),
+      duracao_min: Number(it.duracao_min ?? proc?.duracao_min ?? 0),
+      is_laser: Number(proc?.is_laser || 0),
+    };
+  });
+}
+
+// ─── PROMOÇÕES — CRUD ────────────────────────────────────────
+ipc('promocoes:listar', () => {
+  const db = getDb();
+  return db.prepare(`
+    SELECT p.*,
+      (SELECT COUNT(*) FROM promocao_regras WHERE promocao_id=p.id) as total_regras,
+      (SELECT COUNT(*) FROM promocao_usos    WHERE promocao_id=p.id) as usos_realizados
+    FROM promocoes p
+    ORDER BY p.id
+  `).all();
+});
+
+ipc('promocoes:buscar', (_, id) => {
+  const db = getDb();
+  const prom = db.prepare('SELECT * FROM promocoes WHERE id=?').get(id);
+  if (!prom) return null;
+  const regras = db.prepare(`
+    SELECT r.*, p.nome as procedimento_nome, v.nome as variante_nome
+    FROM promocao_regras r
+    LEFT JOIN procedimentos p ON p.id = r.procedimento_id
+    LEFT JOIN procedimento_variantes v ON v.id = r.variante_id
+    WHERE r.promocao_id=? ORDER BY r.id
+  `).all(id);
+  return { ...prom, regras };
+});
+
+ipc('promocoes:salvar', (_, d) => {
+  const db = getDb();
+  const tx = db.transaction(() => {
+    let pid = d.id ? Number(d.id) : null;
+    if (pid) {
+      db.prepare(`
+        UPDATE promocoes SET nome=?,tipo_desconto=?,valor_desconto=?,modo_itens=?,
+          quantidade_min=?,ativa=?,data_inicio=?,data_fim=?,dias_semana=?,limite_usos=?
+        WHERE id=?
+      `).run(d.nome, d.tipo_desconto, d.valor_desconto, d.modo_itens,
+             d.quantidade_min ?? 1, d.ativa ?? 1,
+             d.data_inicio || null, d.data_fim || null,
+             d.dias_semana || null, d.limite_usos ?? null, pid);
+      db.prepare('DELETE FROM promocao_regras WHERE promocao_id=?').run(pid);
+    } else {
+      const r = db.prepare(`
+        INSERT INTO promocoes (nome,tipo_desconto,valor_desconto,modo_itens,
+          quantidade_min,ativa,data_inicio,data_fim,dias_semana,limite_usos)
+        VALUES (?,?,?,?,?,?,?,?,?,?)
+      `).run(d.nome, d.tipo_desconto, d.valor_desconto, d.modo_itens,
+             d.quantidade_min ?? 1, d.ativa ?? 1,
+             d.data_inicio || null, d.data_fim || null,
+             d.dias_semana || null, d.limite_usos ?? null);
+      pid = r.lastInsertRowid;
+    }
+    const ins = db.prepare(`
+      INSERT INTO promocao_regras (promocao_id,tipo_regra,procedimento_id,variante_id,quantidade)
+      VALUES (?,?,?,?,?)
+    `);
+    (d.regras || []).forEach(r => ins.run(pid, r.tipo_regra, r.procedimento_id || null, r.variante_id || null, r.quantidade ?? 1));
+    return pid;
+  });
+  return tx();
+});
+
+ipc('promocoes:excluir', (_, id) => {
+  getDb().prepare('DELETE FROM promocoes WHERE id=?').run(id);
+  return { ok: true };
+});
+
+ipc('promocoes:calcular', (_, payload) => {
+  const db    = getDb();
+  const itens = _enriquecerItens(db, payload.itens || []);
+  const subtotal = _subtotalItens(itens);
+
+  let aplicada = null;
+
+  if (payload.promocao_id) {
+    const prom = db.prepare('SELECT * FROM promocoes WHERE id=? AND ativa=1').get(payload.promocao_id);
+    if (prom) aplicada = _tentarPromo(db, prom, itens, payload.data_hora);
+  } else if (payload.aplicar_automatico !== 0) {
+    aplicada = _buscarPromoAuto(db, itens, payload.data_hora);
+  }
+
+  const alternativa = aplicada
+    ? _buscarPromoAuto(db, itens, payload.data_hora, aplicada.promocao.id)
+    : null;
+
+  const total = aplicada ? subtotal - aplicada.desconto : subtotal;
+
+  return {
+    subtotal,
+    total,
+    promocao_aplicada: aplicada ? {
+      id: aplicada.promocao.id,
+      nome: aplicada.promocao.nome,
+      tipo_desconto: aplicada.promocao.tipo_desconto,
+      valor_desconto: aplicada.promocao.valor_desconto,
+      subtotal_casado: aplicada.subtotal_casado,
+      valor_aplicado: aplicada.valor_aplicado,
+      desconto: aplicada.desconto,
+      usados: aplicada.usados,
+    } : null,
+    aviso_outra_promocao: alternativa
+      ? `⚠️ Outra promoção também era aplicável: "${alternativa.promocao.nome}". Apenas uma promoção por agendamento.`
+      : null,
+  };
 });
 
 // ─── INTERESSE VARIANTES ─────────────────────────────────────
@@ -357,7 +608,6 @@ function scheduleNotifications() {
         WHERE a.data_hora BETWEEN ? AND ? AND a.status = 'agendado'
         GROUP BY a.id
       `).all(inicio, fim);
-      if (proximos.length) log('INFO', 'notif', `${proximos.length} notificação(ões) disparadas`);
       proximos.forEach(ag => {
         new Notification({
           title: '⏰ Agendamento em 30 minutos',
@@ -374,5 +624,8 @@ function scheduleNotifications() {
 ipc('relatorio:abrir', (_, html) => {
   const win = new BrowserWindow({ width: 800, height: 600, show: false });
   win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
-  win.once('ready-to-show', () => { win.show(); win.webContents.print({ silent: false, printBackground: true }); });
+  win.once('ready-to-show', () => {
+    win.show();
+    win.webContents.print({ silent: false, printBackground: true });
+  });
 });

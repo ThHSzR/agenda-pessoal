@@ -35,68 +35,114 @@
 
   <div id="toast-container"></div>
 
-<!-- ═══ MODAL AGENDAMENTO ═══ -->
-<div id="modal-agendamento" class="modal-overlay hidden">
-  <div class="modal modal-lg">
+<!-- ══════════════════════════════════════════════════════
+     MODAL — AGENDAMENTO
+══════════════════════════════════════════════════════ -->
+<div id="modal-agendamento" class="modal hidden">
+  <div class="modal-overlay" onclick="fecharModal('modal-agendamento')"></div>
+  <div class="modal-content modal-lg">
     <div class="modal-header">
       <h2 id="modal-agend-title">Novo Agendamento</h2>
       <button class="modal-close" onclick="fecharModal('modal-agendamento')">✕</button>
     </div>
     <div class="modal-body">
-      <input type="hidden" id="agend-id" />
+      <input type="hidden" id="agend-id"/>
 
+      <!-- Cliente + Data/Hora -->
       <div class="form-row">
-        <div class="form-group">
+        <div class="form-group" style="flex:2">
           <label>Cliente *</label>
-          <select id="agend-cliente"></select>
+          <select id="agend-cliente" onchange="
+            const opt = this.options[this.selectedIndex];
+            _agendClienteTelefone = opt?.dataset?.tel || null;
+            _agendClienteNome     = opt?.text || null;
+            const btn = document.getElementById('agend-whatsapp-btn');
+            btn.style.display = _agendClienteTelefone ? '' : 'none';
+          ">
+            <option value="" disabled selected>— Selecione —</option>
+          </select>
         </div>
-        <div class="form-group">
+        <div class="form-group" style="flex:1">
           <label>Data e Hora *</label>
-          <input type="datetime-local" id="agend-data-hora" />
+          <input type="datetime-local" id="agend-data-hora"
+            onchange="_agendDataHora = this.value; _agendRecalcularPromocao()"/>
         </div>
       </div>
 
-      <!-- Lista de procedimentos do agendamento -->
+      <!-- Procedimentos -->
       <div class="form-group">
-        <label>Procedimentos *</label>
-        <div id="agend-procs-lista" style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px"></div>
-        <button class="btn btn-secondary btn-sm" onclick="_agendAdicionarProc()">+ Adicionar procedimento</button>
+        <label style="display:flex;justify-content:space-between;align-items:center">
+          <span>Procedimentos *</span>
+          <button class="btn btn-secondary btn-sm" onclick="_agendAdicionarProc()">+ Adicionar</button>
+        </label>
+        <div id="agend-procs-lista" style="display:flex;flex-direction:column;gap:8px;margin-top:4px"></div>
       </div>
 
-      <!-- Totais calculados -->
-      <div style="display:flex;gap:24px;padding:10px 14px;background:var(--color-surface-offset);border-radius:var(--radius-md);margin-bottom:12px">
-        <span>⏱ Duração total: <strong id="agend-total-duracao">0 min</strong></span>
-        <span>💰 Valor total: <strong id="agend-total-valor">R$ 0,00</strong></span>
+      <!-- Totais -->
+      <div style="display:flex;gap:16px;margin-top:4px;background:var(--color-surface-offset);border-radius:var(--radius-md);padding:10px 14px">
+        <span style="font-size:var(--text-sm);color:var(--color-text-muted)">
+          ⏱ Duração total: <strong id="agend-total-duracao">0 min</strong>
+        </span>
+        <span style="font-size:var(--text-sm);color:var(--color-text-muted)">
+          💰 Subtotal: <strong id="agend-total-valor">R$ 0,00</strong>
+        </span>
       </div>
 
-      <!-- Valor editável só por gerente/admin -->
-      <div class="form-row">
-        <div class="form-group">
+      <!-- Promoção info -->
+      <div id="agend-promo-info"></div>
+
+      <!-- Controles de promoção (apenas gerente) -->
+      <div id="agend-promo-controles" style="display:none;gap:8px;margin-top:6px;flex-wrap:wrap;align-items:center">
+        <button class="btn btn-secondary btn-sm" onclick="
+          _agendAplicarPromoAuto = true;
+          _agendPromoOverrideId  = null;
+          const v = document.getElementById('agend-valor');
+          v.dataset.manualOverride = '0';
+          _agendRecalcularPromocao();
+        ">🔄 Reaplicar promoção automática</button>
+
+        <button class="btn btn-secondary btn-sm" onclick="
+          _agendAplicarPromoAuto = false;
+          _agendPromoOverrideId  = null;
+          _agendPromocaoAtual    = null;
+          document.getElementById('agend-promo-info').innerHTML = '';
+          _agendRecalcular();
+        ">❌ Remover promoção</button>
+      </div>
+
+      <!-- Valor cobrado + Status -->
+      <div class="form-row" style="margin-top:8px">
+        <div class="form-group" style="flex:1">
           <label id="agend-valor-label">Valor cobrado (R$)</label>
-          <input type="number" id="agend-valor" step="0.01" min="0" />
+          <input type="number" id="agend-valor" step="0.01" min="0"
+            oninput="this.dataset.manualOverride = '1'"
+            placeholder="0,00"/>
         </div>
-        <div class="form-group">
+        <div class="form-group" style="flex:1">
           <label>Status</label>
           <select id="agend-status">
-            <option value="agendado">Agendado</option>
-            <option value="concluido">Concluído</option>
-            <option value="cancelado">Cancelado</option>
+            <option value="agendado">🕐 Agendado</option>
+            <option value="concluido">✅ Concluído</option>
+            <option value="cancelado">❌ Cancelado</option>
           </select>
         </div>
       </div>
 
+      <!-- Observações -->
       <div class="form-group">
         <label>Observações</label>
-        <textarea id="agend-obs" rows="2"></textarea>
+        <textarea id="agend-obs" rows="2" placeholder="Observações opcionais..."></textarea>
       </div>
     </div>
-    <div class="modal-footer" style="display:flex;justify-content:space-between;align-items:center">
-      <button id="agend-whatsapp-btn" class="btn btn-whatsapp" style="display:none"
-        onclick="_agendWhatsApp()">💬 Confirmar via WhatsApp</button>
-      <div style="display:flex;gap:8px">
-        <button class="btn btn-secondary" onclick="fecharModal('modal-agendamento')">Cancelar</button>
-        <button class="btn btn-primary" onclick="salvarAgendamento()">💾 Salvar</button>
-      </div>
+
+    <div class="modal-footer">
+      <button id="agend-whatsapp-btn" class="btn btn-whatsapp"
+        style="display:none;margin-right:auto"
+        onclick="_agendWhatsApp()">
+        💬 WhatsApp
+      </button>
+      <button class="btn btn-secondary" onclick="fecharModal('modal-agendamento')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarAgendamento()">💾 Salvar</button>
     </div>
   </div>
 </div>
